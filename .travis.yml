@@ -92,6 +92,9 @@ install:
         wget https://s3-us-west-2.amazonaws.com/qgroundcontrol/dependencies/Qt5.7.1-linux-min.tar.bz2 &&
         tar jxf Qt5.7.1-linux-min.tar.bz2 -C /tmp &&
         export PATH=/tmp/Qt5.7-linux/5.7/gcc_64/bin:$PATH &&
+        export &&
+        ls -lsa /tmp/Qt5.7-linux/5.7/gcc_64/bin &&
+        ls -lsa /tmp/ &&
         export DISPLAY=:99.0 &&
         sh -e /etc/init.d/xvfb start
         ;
@@ -177,6 +180,7 @@ script:
   - if [ "${TRAVIS_BRANCH}" != "master" ]; then
         if [[ "${SPEC}" = "linux-g++-64" && "${CONFIG}" = "debug" ]]; then
             mkdir -p ~/.config/QtProject/ && cp ${TRAVIS_BUILD_DIR}/test/qtlogging.ini ~/.config/QtProject/ &&
+            ls -lsa ./debug/ &&
             ./debug/QGroundControl --unittest;
         elif [[ "${SPEC}" = "macx-clang" && "${CONFIG}" = "debug" ]]; then
             mkdir -p ~/Library/Preferences/QtProject/ && cp ${TRAVIS_BUILD_DIR}/test/qtlogging.ini ~/Library/Preferences/QtProject/ &&
