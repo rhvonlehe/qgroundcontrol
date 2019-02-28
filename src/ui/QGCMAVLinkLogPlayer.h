@@ -1,5 +1,4 @@
-#ifndef QGCMAVLINKLOGPLAYER_H
-#define QGCMAVLINKLOGPLAYER_H
+#pragma once
 
 #include <QWidget>
 #include <QFile>
@@ -42,6 +41,7 @@ private slots:
     void _playbackPercentCompleteChanged(int percentComplete);
     void _playbackError(void);
     void _replayLinkDisconnected(void);
+    void _setCurrentLogTime(int secs);
 
 private:
     void _finishPlayback(void);
@@ -50,8 +50,8 @@ private:
 
     LogReplayLink*  _replayLink;
     int             _logDurationSeconds;
+    int             _lastCurrentTime;
     
     Ui::QGCMAVLinkLogPlayer* _ui;
 };
 
-#endif

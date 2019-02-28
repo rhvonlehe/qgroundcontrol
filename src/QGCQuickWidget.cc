@@ -25,7 +25,7 @@
 QGCQuickWidget::QGCQuickWidget(QWidget* parent) :
     QQuickWidget(parent)
 {
-#ifndef __macos__
+#ifndef Q_OS_MAC
     // The following causes the Map control to hang after doing a pinch gesture on mac trackpads.
     // By not turning this on for macos we lose pinch gesture, but two finger scroll still zooms the map.
     // So it's a decent workaround. Qt bug reported: 53634
@@ -50,7 +50,7 @@ bool QGCQuickWidget::setSource(const QUrl& qmlUrl)
             errorList += error.toString();
             errorList += "\n";
         }
-        qgcApp()->showMessage(QString("Source not ready: Status(%1)\nErrors:\n%2").arg(status()).arg(errorList));
+        qgcApp()->showMessage(tr("Source not ready: Status(%1)\nErrors:\n%2").arg(status()).arg(errorList));
         return false;
     }
     

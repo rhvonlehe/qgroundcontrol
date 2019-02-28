@@ -13,16 +13,19 @@
 
 #include <QObject>
 #include <QTimer>
+#include <QTime>
 #include <QUrl>
 
+#include "QGCMAVLink.h"
 #include "QGCLoggingCategory.h"
-#include "VideoSurface.h"
 #include "VideoReceiver.h"
 #include "QGCToolbox.h"
 
 Q_DECLARE_LOGGING_CATEGORY(VideoManagerLog)
 
 class VideoSettings;
+class Vehicle;
+class Joystick;
 
 class VideoManager : public QGCTool
 {
@@ -32,19 +35,26 @@ public:
     VideoManager    (QGCApplication* app, QGCToolbox* toolbox);
     ~VideoManager   ();
 
-    Q_PROPERTY(bool             hasVideo            READ    hasVideo                                    NOTIFY hasVideoChanged)
-    Q_PROPERTY(bool             isGStreamer         READ    isGStreamer                                 NOTIFY isGStreamerChanged)
-    Q_PROPERTY(QString          videoSourceID       READ    videoSourceID                               NOTIFY videoSourceIDChanged)
-    Q_PROPERTY(bool             videoRunning        READ    videoRunning                                NOTIFY videoRunningChanged)
-    Q_PROPERTY(bool             uvcEnabled          READ    uvcEnabled                                  CONSTANT)
-    Q_PROPERTY(VideoSurface*    videoSurface        MEMBER  _videoSurface                               CONSTANT)
-    Q_PROPERTY(VideoReceiver*   videoReceiver       MEMBER  _videoReceiver                              CONSTANT)
-    Q_PROPERTY(bool             recordingEnabled    READ    recordingEnabled                            CONSTANT)
+    Q_PROPERTY(bool             hasVideo                READ    hasVideo                                    NOTIFY hasVideoChanged)
+    Q_PROPERTY(bool             isGStreamer             READ    isGStreamer                                 NOTIFY isGStreamerChanged)
+    Q_PROPERTY(bool             isTaisync               READ    isTaisync       WRITE   setIsTaisync        NOTIFY isTaisyncChanged)
+    Q_PROPERTY(QString          videoSourceID           READ    videoSourceID                               NOTIFY videoSourceIDChanged)
+    Q_PROPERTY(bool             uvcEnabled              READ    uvcEnabled                                  CONSTANT)
+    Q_PROPERTY(bool             fullScreen              READ    fullScreen      WRITE   setfullScreen       NOTIFY fullScreenChanged)
+    Q_PROPERTY(VideoReceiver*   videoReceiver           READ    videoReceiver                               CONSTANT)
+    Q_PROPERTY(double           aspectRatio             READ    aspectRatio                                 NOTIFY aspectRatioChanged)
+    Q_PROPERTY(bool             autoStreamConfigured    READ    autoStreamConfigured                        NOTIFY autoStreamConfiguredChanged)
 
     bool        hasVideo            ();
     bool        isGStreamer         ();
-    bool        videoRunning        () { return _videoRunning; }
+    bool        isAutoStream        ();
+    bool        isTaisync           () { return _isTaisync; }
+    bool        fullScreen          () { return _fullScreen; }
     QString     videoSourceID       () { return _videoSourceID; }
+    double      aspectRatio         ();
+    bool        autoStreamConfigured();
+
+    VideoReceiver*  videoReceiver   () { return _videoReceiver; }
 
 #if defined(QGC_DISABLE_UVC)
     bool        uvcEnabled          () { return false; }
@@ -52,37 +62,45 @@ public:
     bool        uvcEnabled          ();
 #endif
 
-#if defined(QGC_GST_STREAMING) && defined(QGC_ENABLE_VIDEORECORDING)
-    bool        recordingEnabled    () { return true; }
-#else
-    bool        recordingEnabled    () { return false; }
-#endif
+    void        setfullScreen       (bool f) { _fullScreen = f; emit fullScreenChanged(); }
+    void        setIsTaisync        (bool t) { _isTaisync = t;  emit isTaisyncChanged(); }
 
     // Override from QGCTool
     void        setToolbox          (QGCToolbox *toolbox);
 
+    Q_INVOKABLE void startVideo     () { _videoReceiver->start(); }
+    Q_INVOKABLE void stopVideo      () { _videoReceiver->stop();  }
+
 signals:
-    void hasVideoChanged        ();
-    void videoRunningChanged    ();
-    void isGStreamerChanged     ();
-    void videoSourceIDChanged   ();
+    void hasVideoChanged            ();
+    void isGStreamerChanged         ();
+    void videoSourceIDChanged       ();
+    void fullScreenChanged          ();
+    void isAutoStreamChanged        ();
+    void isTaisyncChanged           ();
+    void aspectRatioChanged         ();
+    void autoStreamConfiguredChanged();
 
 private slots:
-    void _videoSourceChanged(void);
+    void _videoSourceChanged        ();
+    void _udpPortChanged            ();
+    void _rtspUrlChanged            ();
+    void _tcpUrlChanged             ();
+    void _updateUVC                 ();
+    void _setActiveVehicle          (Vehicle* vehicle);
+    void _aspectRatioChanged        ();
+    void _restartVideo              ();
 
 private:
-    void _updateTimer           ();
-    void _updateVideo           ();
+    void _updateSettings            ();
 
-    VideoSurface*   _videoSurface;
-    VideoReceiver*  _videoReceiver;
-    bool            _videoRunning;
-#if defined(QGC_GST_STREAMING)
-    QTimer          _frameTimer;
-#endif
+private:
+    bool            _isTaisync          = false;
+    VideoReceiver*  _videoReceiver      = nullptr;
+    VideoSettings*  _videoSettings      = nullptr;
     QString         _videoSourceID;
-    bool            _init;
-    VideoSettings*  _videoSettings;
+    bool            _fullScreen         = false;
+    Vehicle*        _activeVehicle      = nullptr;
 };
 
 #endif

@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *   (c) 2009-2018 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -15,8 +15,7 @@
  *   @author Lorenz Meier <mavteam@student.ethz.ch>
  *   @author Thomas Gubler <thomasgubler@student.ethz.ch>
  */
-#ifndef LINECHARTWIDGET_H
-#define LINECHARTWIDGET_H
+#pragma once
 
 #include <QGridLayout>
 #include <QWidget>
@@ -194,6 +193,11 @@ signals:
     /** @brief This signal is emitted once a logfile has been finished writing */
     void logfileWritten(QString fileName);
 
+private slots:
+    void _filterTimeout(void);
+    void _restartFilterTimeout(void);
+
+private:
+    QTimer _filterTimer;
 };
 
-#endif // LINECHARTWIDGET_H

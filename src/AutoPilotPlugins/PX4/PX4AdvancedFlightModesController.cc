@@ -56,9 +56,7 @@ void PX4AdvancedFlightModesController::_init(void)
         rcMinParam = QString("RC%1_MIN").arg(channel+1);
         rcMaxParam = QString("RC%1_MAX").arg(channel+1);
         rcRevParam = QString("RC%1_REV").arg(channel+1);
-        
-        QVariant value;
-        
+
         _rgRCMin[channel] = getParameterFact(FactSystem::defaultComponentId, rcMinParam)->rawValue().toInt();
         _rgRCMax[channel] = getParameterFact(FactSystem::defaultComponentId, rcMaxParam)->rawValue().toInt();
         
@@ -154,7 +152,7 @@ void PX4AdvancedFlightModesController::_validateConfiguration(void)
         
         if (map < 0 || map > _channelCount) {
             _validConfiguration = false;
-            _configurationErrors += QString("%1 is set to %2. Mapping must between 0 and %3 (inclusive).\n").arg(switchParams[i]).arg(map).arg(_channelCount);
+            _configurationErrors += tr("%1 is set to %2. Mapping must between 0 and %3 (inclusive).\n").arg(switchParams[i]).arg(map).arg(_channelCount);
         }
     }
     
@@ -170,7 +168,7 @@ void PX4AdvancedFlightModesController::_validateConfiguration(void)
         for (int j=0; j<switchParams.count(); j++) {
             if (map != 0 && map == switchMappings[j]) {
                 _validConfiguration = false;
-                _configurationErrors += QString("%1 is set to same channel as %2.\n").arg(switchParams[j]).arg(attitudeParams[i]);
+                _configurationErrors += tr("%1 is set to same channel as %2.\n").arg(switchParams[j], attitudeParams[i]);
             }
         }
     }
@@ -185,7 +183,7 @@ void PX4AdvancedFlightModesController::_validateConfiguration(void)
         float threshold = getParameterFact(-1, thresholdParam)->rawValue().toFloat();
         if (threshold < 0.0f || threshold > 1.0f) {
             _validConfiguration = false;
-            _configurationErrors += QString("%1 is set to %2. Threshold must between 0.0 and 1.0 (inclusive).\n").arg(thresholdParam).arg(threshold);
+            _configurationErrors += tr("%1 is set to %2. Threshold must between 0.0 and 1.0 (inclusive).\n").arg(thresholdParam).arg(threshold);
         }
     }
 }
@@ -220,8 +218,6 @@ void PX4AdvancedFlightModesController::_rcChannelsChanged(int channelCount, int 
 
 double PX4AdvancedFlightModesController::_switchLiveRange(const QString& param)
 {
-    QVariant value;
-    
     int channel = getParameterFact(-1, param)->rawValue().toInt();
     if (channel == 0) {
         return 0.0;

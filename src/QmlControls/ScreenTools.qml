@@ -53,24 +53,47 @@ Item {
     readonly property real mediumFontPointRatio:     1.25
     readonly property real largeFontPointRatio:      1.5
 
-    property bool isAndroid:        ScreenToolsController.isAndroid
-    property bool isiOS:            ScreenToolsController.isiOS
-    property bool isMobile:         ScreenToolsController.isMobile
-    property bool isDebug:          ScreenToolsController.isDebug
-    property bool isTinyScreen:     (Screen.width / Screen.pixelDensity) < 120 // 120mm
-    property bool isShortScreen:    ScreenToolsController.isMobile && ((Screen.height / Screen.width) < 0.6) // Nexus 7 for example
+    property real realPixelDensity: {
+        //-- If a plugin defines it, just use what it tells us
+        if(QGroundControl.corePlugin.options.devicePixelDensity != 0) {
+            return QGroundControl.corePlugin.options.devicePixelDensity
+        }
+        //-- Android is rather unreliable
+        if(isAndroid) {
+            // Lets assume it's unlikely you have a tablet over 300mm wide
+            if((Screen.width / Screen.pixelDensity) > 300) {
+                return Screen.pixelDensity * 2
+            }
+        }
+        //-- Let's use what the system tells us
+        return Screen.pixelDensity
+    }
 
-    readonly property real minTouchMillimeters: 10      ///< Minimum touch size in millimeters
-    property real minTouchPixels:               0       ///< Minimum touch size in pixels
+    property bool isAndroid:                        ScreenToolsController.isAndroid
+    property bool isiOS:                            ScreenToolsController.isiOS
+    property bool isMobile:                         ScreenToolsController.isMobile
+    property bool isWindows:                        ScreenToolsController.isWindows
+    property bool isDebug:                          ScreenToolsController.isDebug
+    property bool isMac:                            ScreenToolsController.isMacOS
+    property bool isTinyScreen:                     (Screen.width / realPixelDensity) < 120 // 120mm
+    property bool isShortScreen:                    ScreenToolsController.isMobile && ((Screen.height / Screen.width) < 0.6) // Nexus 7 for example
+    property bool isHugeScreen:                     (Screen.width / realPixelDensity) >= (23.5 * 25.4) // 27" monitor
+    property bool isSerialAvailable:                ScreenToolsController.isSerialAvailable
+
+    readonly property real minTouchMillimeters:     10      ///< Minimum touch size in millimeters
+    property real minTouchPixels:                   0       ///< Minimum touch size in pixels
 
     // The implicit heights/widths for our custom control set
-    property real implicitButtonWidth:      Math.round(defaultFontPixelWidth *  (isMobile ? 7.0 : 5.0))
-    property real implicitButtonHeight:     Math.round(defaultFontPixelHeight * (isMobile ? 2.0 : 1.6))
-    property real implicitCheckBoxWidth:    Math.round(defaultFontPixelHeight * (isMobile ? 1.5 : 1.0))
-    property real implicitTextFieldHeight:  Math.round(defaultFontPixelHeight * (isMobile ? 2.0 : 1.6))
-    property real implicitComboBoxHeight:   Math.round(defaultFontPixelHeight * (isMobile ? 2.0 : 1.6))
-    property real implicitComboBoxWidth:    Math.round(defaultFontPixelWidth *  (isMobile ? 7.0 : 5.0))
-    property real implicitSliderHeight:     isMobile ? Math.max(defaultFontPixelHeight, minTouchPixels) : defaultFontPixelHeight
+    property real implicitButtonWidth:              Math.round(defaultFontPixelWidth *  (isMobile ? 7.0 : 5.0))
+    property real implicitButtonHeight:             Math.round(defaultFontPixelHeight * (isMobile ? 2.0 : 1.6))
+    property real implicitCheckBoxHeight:           Math.round(defaultFontPixelHeight * (isMobile ? 2.0 : 1.0))
+    property real implicitRadioButtonHeight:        implicitCheckBoxHeight
+    property real implicitTextFieldHeight:          Math.round(defaultFontPixelHeight * (isMobile ? 2.0 : 1.6))
+    property real implicitComboBoxHeight:           Math.round(defaultFontPixelHeight * (isMobile ? 2.0 : 1.6))
+    property real implicitComboBoxWidth:            Math.round(defaultFontPixelWidth *  (isMobile ? 7.0 : 5.0))
+    property real implicitSliderHeight:             isMobile ? Math.max(defaultFontPixelHeight, minTouchPixels) : defaultFontPixelHeight
+    property real checkBoxIndicatorSize:            Math.round(defaultFontPixelHeight * (isMobile ? 1.5 : 1.0))
+    property real radioButtonIndicatorSize:         checkBoxIndicatorSize
 
     readonly property string normalFontFamily:      "opensans"
     readonly property string demiboldFontFamily:    "opensans-demibold"
@@ -84,6 +107,14 @@ Item {
             if(ScreenToolsController.isDebug)
                 _setBasePointSize(QGroundControl.settingsManager.appSettings.appFontPointSize.value)
         }
+    }
+
+    onRealPixelDensityChanged: {
+        _setBasePointSize(defaultFontPointSize)
+    }
+
+    function printScreenStats() {
+        console.log('ScreenTools: Screen.width: ' + Screen.width + ' Screen.height: ' + Screen.height + ' Screen.pixelDensity: ' + Screen.pixelDensity)
     }
 
     /// Returns the current x position of the mouse in global screen coordinates.
@@ -105,8 +136,13 @@ Item {
         smallFontPointSize      = defaultFontPointSize  * _screenTools.smallFontPointRatio
         mediumFontPointSize     = defaultFontPointSize  * _screenTools.mediumFontPointRatio
         largeFontPointSize      = defaultFontPointSize  * _screenTools.largeFontPointRatio
-        minTouchPixels          = Math.round(minTouchMillimeters * Screen.pixelDensity)
+        minTouchPixels          = Math.round(minTouchMillimeters * realPixelDensity)
+        if (minTouchPixels / Screen.height > 0.15) {
+            // If using physical sizing takes up too much of the vertical real estate fall back to font based sizing
+            minTouchPixels      = defaultFontPixelHeight * 3
+        }
         toolbarHeight           = isMobile ? minTouchPixels : defaultFontPixelHeight * 3
+        toolbarHeight           = toolbarHeight * QGroundControl.corePlugin.options.toolbarHeightMultiplier
     }
 
     Text {
@@ -134,26 +170,20 @@ Item {
                             // we will just drop point size to make things fit. Correct size not yet determined.
                             baseSize = 12;  // This will be lowered in a future pull
                         } else {
-                            baseSize = 12;
+                            baseSize = 14;
                         }
-                    } else if((Screen.width / Screen.pixelDensity) < 120) {
+                    } else if((Screen.width / realPixelDensity) < 120) {
                         baseSize = 11;
                     // Other Android
                     } else {
                         baseSize = 14;
                     }
                 } else {
-                    //-- Mac OS
-                    if(ScreenToolsController.isMacOS)
-                        baseSize = _defaultFont.font.pointSize;
-                    //-- Linux
-                    else if(ScreenToolsController.isLinux)
-                        baseSize = _defaultFont.font.pointSize - 3.25;
-                    //-- Windows
-                    else
-                        baseSize = _defaultFont.font.pointSize;
+                    baseSize = _defaultFont.font.pointSize;
                 }
+                _appFontPointSizeFact._setIgnoreQGCRebootRequired(true)
                 _appFontPointSizeFact.value = baseSize
+                _appFontPointSizeFact._setIgnoreQGCRebootRequired(false)
                 //-- Release build doesn't get signal
                 if(!ScreenToolsController.isDebug)
                     _screenTools._setBasePointSize(baseSize);

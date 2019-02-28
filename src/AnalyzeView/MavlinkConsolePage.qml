@@ -21,10 +21,12 @@ import QGroundControl.ScreenTools   1.0
 import QGroundControl.Controllers   1.0
 
 AnalyzePage {
-    id:                 mavlinkConsolePage
-    pageComponent:      pageComponent
-    pageName:           qsTr("Mavlink Console")
-    pageDescription:    qsTr("Mavlink Console provides a connection to the vehicle's system shell.")
+    id:              mavlinkConsolePage
+    pageComponent:   pageComponent
+    pageName:        qsTr("Mavlink Console")
+    pageDescription: qsTr("Mavlink Console provides a connection to the vehicle's system shell.")
+
+    property bool isLoaded: false
 
     Component {
         id: pageComponent
@@ -34,28 +36,86 @@ AnalyzePage {
             height: availableHeight
             width:  availableWidth
 
-            TextArea {
-                id:                consoleEditor
-                Layout.fillHeight: true
-                anchors.left:      parent.left
-                anchors.right:     parent.right
-                font.family:       ScreenTools.fixedFontFamily
-                font.pointSize:    ScreenTools.defaultFontPointSize
-                readOnly:          true
+            Connections {
+                target: conController
 
-                cursorPosition:    conController.cursor
-                text:              conController.text
+                onDataChanged: {
+                    // Keep the view in sync if the button is checked
+                    if (isLoaded) {
+                        if (followTail.checked) {
+                            listview.positionViewAtEnd();
+                        }
+                    }
+                }
             }
 
-            QGCTextField {
-                id:              command
-                anchors.left:    parent.left
-                anchors.right:   parent.right
-                placeholderText: "Enter Commands here..."
+            Component {
+                id: delegateItem
+                Rectangle {
+                    color:  qgcPal.windowShade
+                    height: Math.round(ScreenTools.defaultFontPixelHeight * 0.1 + field.height)
+                    width:  listview.width
 
-                onAccepted: {
-                    conController.sendCommand(text)
-                    text = ""
+                    QGCLabel {
+                        id:          field
+                        text:        display
+                        width:       parent.width
+                        wrapMode:    Text.NoWrap
+                        font.family: ScreenTools.fixedFontFamily
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                }
+            }
+
+            QGCListView {
+                Component.onCompleted: {
+                    isLoaded = true
+                }
+                Layout.fillHeight: true
+                Layout.fillWidth:  true
+                clip:              true
+                id:                listview
+                model:             conController
+                delegate:          delegateItem
+
+                // Unsync the view if the user interacts
+                onMovementStarted: {
+                    followTail.checked = false
+                }
+            }
+
+            RowLayout {
+                Layout.fillWidth:   true
+                QGCTextField {
+                    id:               command
+                    Layout.fillWidth: true
+                    placeholderText:  "Enter Commands here..."
+                    onAccepted: {
+                        conController.sendCommand(text)
+                        text = ""
+                    }
+                    Keys.onPressed: {
+                        if (event.key == Qt.Key_Up) {
+                            text = conController.historyUp(text);
+                            event.accepted = true;
+                        } else if (event.key == Qt.Key_Down) {
+                            text = conController.historyDown(text);
+                            event.accepted = true;
+                        }
+                    }
+                }
+
+                QGCButton {
+                    id:        followTail
+                    text:      qsTr("Show Latest")
+                    checkable: true
+                    checked:   true
+
+                    onCheckedChanged: {
+                        if (checked && isLoaded) {
+                            listview.positionViewAtEnd();
+                        }
+                    }
                 }
             }
         }

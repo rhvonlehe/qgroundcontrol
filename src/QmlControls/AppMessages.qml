@@ -15,6 +15,8 @@ import QtQuick.Dialogs          1.2
 import QGroundControl               1.0
 import QGroundControl.Palette       1.0
 import QGroundControl.Controls      1.0
+import QGroundControl.FactSystem    1.0
+import QGroundControl.FactControls  1.0
 import QGroundControl.Controllers   1.0
 import QGroundControl.ScreenTools   1.0
 
@@ -23,6 +25,8 @@ QGCView {
     viewPanel:  panel
 
     property bool loaded: false
+
+    property var _qgcView: qgcView
 
     QGCPalette { id: qgcPal; colorGroupEnabled: panel.enabled }
 
@@ -39,8 +43,22 @@ QGCView {
                     id:         categoryColumn
                     spacing:    ScreenTools.defaultFontPixelHeight / 2
 
+                    QGCButton {
+                        text: qsTr("Clear All")
+                        onClicked: {
+                            var logCats = QGroundControl.loggingCategories()
+                            for (var i=0; i<logCats.length; i++) {
+                                QGroundControl.setCategoryLoggingOn(logCats[i], false)
+                            }
+                            QGroundControl.updateLoggingFilterRules()
+                            categoryRepeater.model = undefined
+                            categoryRepeater.model = QGroundControl.loggingCategories()
+                        }
+                    }
+
                     Repeater {
-                        model:      QGroundControl.loggingCategories()
+                        id:     categoryRepeater
+                        model:  QGroundControl.loggingCategories()
 
                         QGCCheckBox {
                             text:       modelData
@@ -111,17 +129,18 @@ QGCView {
                 delegate:        delegateItem
             }
 
-            FileDialog {
+            QGCFileDialog {
                 id:             writeDialog
-                folder:         shortcuts.home
+                folder:         QGroundControl.settingsManager.appSettings.logSavePath
                 nameFilters:    [qsTr("Log files (*.txt)"), qsTr("All Files (*)")]
+                fileExtension:  qsTr("txt")
                 selectExisting: false
                 title:          qsTr("Select log save file")
-                onAccepted: {
-                    debugMessageModel.writeMessages(fileUrl);
+                qgcView:        _qgcView
+                onAcceptedForSave: {
+                    debugMessageModel.writeMessages(file);
                     visible = false;
                 }
-                onRejected:     visible = false
             }
 
             Connections {
@@ -134,16 +153,28 @@ QGCView {
                 id:              writeButton
                 anchors.bottom:  parent.bottom
                 anchors.left:    parent.left
-                onClicked:       writeDialog.visible = true
+                onClicked:       writeDialog.openForSave()
                 text:            qsTr("Save App Log")
             }
 
-            BusyIndicator {
-                id:              writeBusy
-                anchors.bottom:  writeButton.bottom
-                anchors.left:    writeButton.right
-                height:          writeButton.height
-                visible:        !writeButton.enabled
+            QGCLabel {
+                id:                 gstLabel
+                anchors.left:       writeButton.right
+                anchors.leftMargin: ScreenTools.defaultFontPixelWidth
+                anchors.baseline:   gstCombo.baseline
+                text:               qsTr("GStreamer Debug")
+                visible:            QGroundControl.settingsManager.appSettings.gstDebugLevel.visible
+            }
+
+            FactComboBox {
+                id:                 gstCombo
+                anchors.left:       gstLabel.right
+                anchors.leftMargin: ScreenTools.defaultFontPixelWidth / 2
+                anchors.bottom:     parent.bottom
+                width:              ScreenTools.defaultFontPixelWidth * 10
+                model:              ["Disabled", "1", "2", "3", "4", "5", "6", "7", "8"]
+                fact:               QGroundControl.settingsManager.appSettings.gstDebugLevel
+                visible:            QGroundControl.settingsManager.appSettings.gstDebugLevel.visible
             }
 
             QGCButton {
@@ -166,7 +197,7 @@ QGCView {
                 id:             filterButton
                 anchors.bottom: parent.bottom
                 anchors.right:  parent.right
-                text:           qsTr("Set logging")
+                text:           qsTr("Set Logging")
                 onClicked:      showDialog(filtersDialogComponent, qsTr("Turn on logging categories"), qgcView.showDialogDefaultWidth, StandardButton.Close)
             }
         }

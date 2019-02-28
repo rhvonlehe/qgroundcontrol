@@ -24,28 +24,30 @@ const char* QGroundControlQmlGlobal::_flightMapPositionLatitudeSettingsKey =    
 const char* QGroundControlQmlGlobal::_flightMapPositionLongitudeSettingsKey =   "Longitude";
 const char* QGroundControlQmlGlobal::_flightMapZoomSettingsKey =                "FlightMapZoom";
 
+QGeoCoordinate   QGroundControlQmlGlobal::_coord = QGeoCoordinate(0.0,0.0);
+double           QGroundControlQmlGlobal::_zoom = 2;
+
 QGroundControlQmlGlobal::QGroundControlQmlGlobal(QGCApplication* app, QGCToolbox* toolbox)
-    : QGCTool(app, toolbox)
-    , _flightMapInitialZoom(14.7)   // About 500 meter scale
-    , _linkManager(NULL)
-    , _multiVehicleManager(NULL)
-    , _mapEngineManager(NULL)
-    , _qgcPositionManager(NULL)
-    , _missionCommandTree(NULL)
-    , _videoManager(NULL)
-    , _mavlinkLogManager(NULL)
-    , _corePlugin(NULL)
-    , _firmwarePluginManager(NULL)
-    , _settingsManager(NULL)
-    , _skipSetupPage(false)
+    : QGCTool               (app, toolbox)
 {
     // We clear the parent on this object since we run into shutdown problems caused by hybrid qml app. Instead we let it leak on shutdown.
-    setParent(NULL);
+    setParent(nullptr);
+    // Load last coordinates and zoom from config file
+    QSettings settings;
+    settings.beginGroup(_flightMapPositionSettingsGroup);
+    _coord.setLatitude(settings.value(_flightMapPositionLatitudeSettingsKey,    _coord.latitude()).toDouble());
+    _coord.setLongitude(settings.value(_flightMapPositionLongitudeSettingsKey,  _coord.longitude()).toDouble());
+    _zoom = settings.value(_flightMapZoomSettingsKey, _zoom).toDouble();
 }
 
 QGroundControlQmlGlobal::~QGroundControlQmlGlobal()
 {
-
+    // Save last coordinates and zoom to config file
+    QSettings settings;
+    settings.beginGroup(_flightMapPositionSettingsGroup);
+    settings.setValue(_flightMapPositionLatitudeSettingsKey, _coord.latitude());
+    settings.setValue(_flightMapPositionLongitudeSettingsKey, _coord.longitude());
+    settings.setValue(_flightMapZoomSettingsKey, _zoom);
 }
 
 void QGroundControlQmlGlobal::setToolbox(QGCToolbox* toolbox)
@@ -62,6 +64,11 @@ void QGroundControlQmlGlobal::setToolbox(QGCToolbox* toolbox)
     _corePlugin             = toolbox->corePlugin();
     _firmwarePluginManager  = toolbox->firmwarePluginManager();
     _settingsManager        = toolbox->settingsManager();
+    _gpsRtkFactGroup        = qgcApp()->gpsRtkFactGroup();
+    _airspaceManager        = toolbox->airspaceManager();
+#if defined(QGC_GST_TAISYNC_ENABLED)
+    _taisyncManager         = toolbox->taisyncManager();
+#endif
 }
 
 void QGroundControlQmlGlobal::saveGlobalSetting (const QString& key, const QString& value)
@@ -137,7 +144,7 @@ void QGroundControlQmlGlobal::startAPMArduSubMockLink(bool sendStatusText)
 #endif
 }
 
-void QGroundControlQmlGlobal::stopAllMockLinks(void)
+void QGroundControlQmlGlobal::stopOneMockLink(void)
 {
 #ifdef QT_DEBUG
     LinkManager* linkManager = qgcApp()->toolbox()->linkManager();
@@ -148,6 +155,7 @@ void QGroundControlQmlGlobal::stopAllMockLinks(void)
 
         if (mockLink) {
             linkManager->disconnectLink(mockLink);
+            return;
         }
     }
 #endif
@@ -170,6 +178,15 @@ int QGroundControlQmlGlobal::supportedFirmwareCount()
     return _firmwarePluginManager->supportedFirmwareTypes().count();
 }
 
+bool QGroundControlQmlGlobal::px4ProFirmwareSupported()
+{
+    return _firmwarePluginManager->supportedFirmwareTypes().contains(MAV_AUTOPILOT_PX4);
+}
+
+bool QGroundControlQmlGlobal::apmFirmwareSupported()
+{
+    return _firmwarePluginManager->supportedFirmwareTypes().contains(MAV_AUTOPILOT_ARDUPILOTMEGA);
+}
 
 bool QGroundControlQmlGlobal::linesIntersect(QPointF line1A, QPointF line1B, QPointF line2A, QPointF line2B)
 {
@@ -187,34 +204,12 @@ void QGroundControlQmlGlobal::setSkipSetupPage(bool skip)
     }
 }
 
-QGeoCoordinate QGroundControlQmlGlobal::flightMapPosition(void)
-{
-    QSettings       settings;
-    QGeoCoordinate  coord;
-
-    settings.beginGroup(_flightMapPositionSettingsGroup);
-    coord.setLatitude(settings.value(_flightMapPositionLatitudeSettingsKey, 0).toDouble());
-    coord.setLongitude(settings.value(_flightMapPositionLongitudeSettingsKey, 0).toDouble());
-
-    return coord;
-}
-
-double QGroundControlQmlGlobal::flightMapZoom(void)
-{
-    QSettings settings;
-
-    settings.beginGroup(_flightMapPositionSettingsGroup);
-    return settings.value(_flightMapZoomSettingsKey, 2).toDouble();
-}
-
 void QGroundControlQmlGlobal::setFlightMapPosition(QGeoCoordinate& coordinate)
 {
     if (coordinate != flightMapPosition()) {
-        QSettings settings;
+        _coord.setLatitude(coordinate.latitude());
+        _coord.setLongitude(coordinate.longitude());
 
-        settings.beginGroup(_flightMapPositionSettingsGroup);
-        settings.setValue(_flightMapPositionLatitudeSettingsKey, coordinate.latitude());
-        settings.setValue(_flightMapPositionLongitudeSettingsKey, coordinate.longitude());
         emit flightMapPositionChanged(coordinate);
     }
 }
@@ -222,10 +217,7 @@ void QGroundControlQmlGlobal::setFlightMapPosition(QGeoCoordinate& coordinate)
 void QGroundControlQmlGlobal::setFlightMapZoom(double zoom)
 {
     if (zoom != flightMapZoom()) {
-        QSettings settings;
-
-        settings.beginGroup(_flightMapPositionSettingsGroup);
-        settings.setValue(_flightMapZoomSettingsKey, zoom);
+        _zoom = zoom;
         emit flightMapZoomChanged(zoom);
     }
 }

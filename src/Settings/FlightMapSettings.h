@@ -7,8 +7,7 @@
  *
  ****************************************************************************/
 
-#ifndef FlightMapSettings_H
-#define FlightMapSettings_H
+#pragma once
 
 #include "SettingsGroup.h"
 
@@ -17,13 +16,17 @@ class FlightMapSettings : public SettingsGroup
     Q_OBJECT
 
 public:
-    FlightMapSettings(QObject* parent = NULL);
+    FlightMapSettings(QObject* parent = nullptr);
 
     // This enum must match the json meta data
     typedef enum {
         mapProviderBing,
         mapProviderGoogle,
-        mapProviderStarkart
+        mapProviderStarkart,
+        mapProviderMapbox,
+        mapProviderEsri,
+        mapProviderEniro,
+        mapProviderVWorld
     } MapProvider_t;
 
     // This enum must match the json meta data
@@ -34,15 +37,9 @@ public:
         mapTypeTerrain
     } MapType_t;
 
-    Q_PROPERTY(Fact* mapProvider     READ mapProvider   CONSTANT)               ///< Currently selected map provider
-    Q_PROPERTY(Fact* mapType         READ mapType       NOTIFY mapTypeChanged)  ///< Current selected map type
-
-    Fact* mapProvider   (void);
-    Fact* mapType       (void);
-
-    static const char* flightMapSettingsGroupName;
-    static const char* mapProviderSettingsName;
-    static const char* mapTypeSettingsName;
+    DEFINE_SETTING_NAME_GROUP()
+    DEFINE_SETTINGFACT(mapProvider)
+    DEFINE_SETTINGFACT(mapType)
 
 signals:
     void mapTypeChanged(void);
@@ -52,13 +49,8 @@ private slots:
 
 private:
     void _removeEnumValue(int value, QStringList& enumStrings, QVariantList& enumValues);
+    void _excludeProvider(MapProvider_t provider);
 
-    SettingsFact*   _mapProviderFact;
-    SettingsFact*   _mapTypeFact;
     QStringList     _savedMapTypeStrings;
     QVariantList    _savedMapTypeValues;
-
-    static const char* _settingsGroupName;
 };
-
-#endif

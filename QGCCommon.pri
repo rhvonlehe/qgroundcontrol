@@ -19,8 +19,9 @@
 linux {
     linux-g++ | linux-g++-64 | linux-g++-32 | linux-clang {
         message("Linux build")
-        CONFIG += LinuxBuild
+        CONFIG  += LinuxBuild
         DEFINES += __STDC_LIMIT_MACROS
+        DEFINES += QGC_GST_TAISYNC_ENABLED
         linux-clang {
             message("Linux clang")
             QMAKE_CXXFLAGS += -Qunused-arguments -fcolor-diagnostics
@@ -29,11 +30,13 @@ linux {
         message("Linux R-Pi2 build")
         CONFIG += LinuxBuild
         DEFINES += __STDC_LIMIT_MACROS __rasp_pi2__
-    } else : android-g++ {
+        DEFINES += QGC_GST_TAISYNC_ENABLED
+    } else : android-g++ | android-clang {
         CONFIG += AndroidBuild MobileBuild
         DEFINES += __android__
         DEFINES += __STDC_LIMIT_MACROS
         DEFINES += QGC_ENABLE_BLUETOOTH
+        DEFINES += QGC_GST_TAISYNC_ENABLED
         target.path = $$DESTDIR
         equals(ANDROID_TARGET_ARCH, x86)  {
             CONFIG += Androidx86Build
@@ -46,20 +49,21 @@ linux {
         error("Unsuported Linux toolchain, only GCC 32- or 64-bit is supported")
     }
 } else : win32 {
-    win32-msvc2010 | win32-msvc2012 | win32-msvc2013 | win32-msvc2015 {
+    win32-msvc2015 {
         message("Windows build")
         CONFIG += WindowsBuild
         DEFINES += __STDC_LIMIT_MACROS
+        DEFINES += QGC_GST_TAISYNC_ENABLED
     } else {
-        error("Unsupported Windows toolchain, only Visual Studio 2010, 2012, and 2013 are supported")
+        error("Unsupported Windows toolchain, only Visual Studio 2015 is supported")
     }
 } else : macx {
     macx-clang | macx-llvm {
         message("Mac build")
-        CONFIG += MacBuild
-        DEFINES += __macos__
-        CONFIG += x86_64
-        CONFIG -= x86
+        CONFIG  += MacBuild
+        CONFIG  += x86_64
+        CONFIG  -= x86
+        DEFINES += QGC_GST_TAISYNC_ENABLED
         equals(QT_MAJOR_VERSION, 5) | greaterThan(QT_MINOR_VERSION, 5) {
                 QMAKE_MACOSX_DEPLOYMENT_TARGET = 10.7
         } else {
@@ -68,6 +72,8 @@ linux {
         #-- Not forcing anything. Let qmake find the latest, installed SDK.
         #QMAKE_MAC_SDK = macosx10.12
         QMAKE_CXXFLAGS += -fvisibility=hidden
+        #-- Disable annoying warnings comming from mavlink.h
+        QMAKE_CXXFLAGS += -Wno-address-of-packed-member
     } else {
         error("Unsupported Mac toolchain, only 64-bit LLVM+clang is supported")
     }
@@ -82,8 +88,9 @@ linux {
     DEFINES += QGC_NO_GOOGLE_MAPS
     DEFINES += NO_SERIAL_LINK
     DEFINES += QGC_DISABLE_UVC
+    DEFINES += QGC_GST_TAISYNC_ENABLED
     QMAKE_IOS_DEPLOYMENT_TARGET = 8.0
-    QMAKE_IOS_TARGETED_DEVICE_FAMILY = 1,2 # Universal
+    QMAKE_APPLE_TARGETED_DEVICE_FAMILY = 1,2 # Universal
     QMAKE_LFLAGS += -Wl,-no_pie
 } else {
     error("Unsupported build platform, only Linux, Windows, Android and Mac (Mac OS and iOS) are supported")
@@ -116,7 +123,7 @@ exists ($$PWD/.git) {
     GIT_TIME     = $$system(git --git-dir $$PWD/.git --work-tree $$PWD show --oneline --format=\"%ci\" -s HEAD)
 
     # determine if we're on a tag matching vX.Y.Z (stable release)
-    contains(GIT_DESCRIBE, v[0-9].[0-9].[0-9]) {
+    contains(GIT_DESCRIBE, v[0-9]+.[0-9]+.[0-9]+) {
         # release version "vX.Y.Z"
         GIT_VERSION = $${GIT_DESCRIBE}
     } else {
@@ -235,7 +242,9 @@ ReleaseBuild {
     DEFINES += QT_NO_DEBUG QT_MESSAGELOGCONTEXT
     CONFIG += force_debug_info  # Enable debugging symbols on release builds
     !iOSBuild {
-        CONFIG += ltcg              # Turn on link time code generation
+        !AndroidBuild {
+            CONFIG += ltcg              # Turn on link time code generation
+        }
     }
 
     WindowsBuild {

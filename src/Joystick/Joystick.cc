@@ -12,6 +12,10 @@
 #include "QGC.h"
 #include "AutoPilotPlugin.h"
 #include "UAS.h"
+#include "QGCApplication.h"
+#include "VideoManager.h"
+#include "QGCCameraManager.h"
+#include "QGCCameraControl.h"
 
 #include <QSettings>
 
@@ -25,12 +29,25 @@ const char* Joystick::_throttleModeSettingsKey =        "ThrottleMode";
 const char* Joystick::_exponentialSettingsKey =         "Exponential";
 const char* Joystick::_accumulatorSettingsKey =         "Accumulator";
 const char* Joystick::_deadbandSettingsKey =            "Deadband";
-const char* Joystick::_txModeSettingsKey =              NULL;
+const char* Joystick::_circleCorrectionSettingsKey =    "Circle_Correction";
+const char* Joystick::_frequencySettingsKey =           "Frequency";
+const char* Joystick::_txModeSettingsKey =              nullptr;
 const char* Joystick::_fixedWingTXModeSettingsKey =     "TXMode_FixedWing";
 const char* Joystick::_multiRotorTXModeSettingsKey =    "TXMode_MultiRotor";
 const char* Joystick::_roverTXModeSettingsKey =         "TXMode_Rover";
 const char* Joystick::_vtolTXModeSettingsKey =          "TXMode_VTOL";
 const char* Joystick::_submarineTXModeSettingsKey =     "TXMode_Submarine";
+
+const char* Joystick::_buttonActionArm =                QT_TR_NOOP("Arm");
+const char* Joystick::_buttonActionDisarm =             QT_TR_NOOP("Disarm");
+const char* Joystick::_buttonActionVTOLFixedWing =      QT_TR_NOOP("VTOL: Fixed Wing");
+const char* Joystick::_buttonActionVTOLMultiRotor =     QT_TR_NOOP("VTOL: Multi-Rotor");
+const char* Joystick::_buttonActionZoomIn =             QT_TR_NOOP("Zoom In");
+const char* Joystick::_buttonActionZoomOut =            QT_TR_NOOP("Zoom Out");
+const char* Joystick::_buttonActionNextStream =         QT_TR_NOOP("Next Video Stream");
+const char* Joystick::_buttonActionPreviousStream =     QT_TR_NOOP("Previous Video Stream");
+const char* Joystick::_buttonActionNextCamera =         QT_TR_NOOP("Next Camera");
+const char* Joystick::_buttonActionPreviousCamera =     QT_TR_NOOP("Previous Camera");
 
 const char* Joystick::_rgFunctionSettingsKey[Joystick::maxFunction] = {
     "RollAxis",
@@ -49,16 +66,19 @@ Joystick::Joystick(const QString& name, int axisCount, int buttonCount, int hatC
     , _hatCount(hatCount)
     , _hatButtonCount(4*hatCount)
     , _totalButtonCount(_buttonCount+_hatButtonCount)
-    , _calibrationMode(CalibrationModeOff)
-    , _rgAxisValues(NULL)
-    , _rgCalibration(NULL)
-    , _rgButtonValues(NULL)
+    , _calibrationMode(false)
+    , _rgAxisValues(nullptr)
+    , _rgCalibration(nullptr)
+    , _rgButtonValues(nullptr)
     , _lastButtonBits(0)
-    , _throttleMode(ThrottleModeCenterZero)
+    , _throttleMode(ThrottleModeDownZero)
+    , _negativeThrust(false)
     , _exponential(0)
     , _accumulator(false)
     , _deadband(false)
-    , _activeVehicle(NULL)
+    , _circleCorrection(true)
+    , _frequency(25.0f)
+    , _activeVehicle(nullptr)
     , _pollingStartedForCalibration(false)
     , _multiVehicleManager(multiVehicleManager)
 {
@@ -74,6 +94,8 @@ Joystick::Joystick(const QString& name, int axisCount, int buttonCount, int hatC
         _rgButtonValues[i] = false;
     }
 
+    _updateTXModeSettingsKey(_multiVehicleManager->activeVehicle());
+
     _loadSettings();
 
     connect(_multiVehicleManager, &MultiVehicleManager::activeVehicleChanged, this, &Joystick::_activeVehicleChanged);
@@ -81,6 +103,10 @@ Joystick::Joystick(const QString& name, int axisCount, int buttonCount, int hatC
 
 Joystick::~Joystick()
 {
+    // Crash out of the thread if it is still running
+    terminate();
+    wait();
+
     delete[] _rgAxisValues;
     delete[] _rgCalibration;
     delete[] _rgButtonValues;
@@ -112,13 +138,15 @@ void Joystick::_setDefaultCalibration(void) {
     _exponential = 0;
     _accumulator = false;
     _deadband = false;
-    _throttleMode = ThrottleModeCenterZero;
+    _circleCorrection = false;
+    _frequency = 25.0f;
+    _throttleMode = ThrottleModeDownZero;
     _calibrated = true;
 
     _saveSettings();
 }
 
-void Joystick::_activeVehicleChanged(Vehicle *activeVehicle)
+void Joystick::_updateTXModeSettingsKey(Vehicle* activeVehicle)
 {
     if(activeVehicle) {
         if(activeVehicle->fixedWing()) {
@@ -132,11 +160,20 @@ void Joystick::_activeVehicleChanged(Vehicle *activeVehicle)
         } else if(activeVehicle->sub()) {
             _txModeSettingsKey = _submarineTXModeSettingsKey;
         } else {
-            _txModeSettingsKey = NULL;
+            _txModeSettingsKey = nullptr;
             qWarning() << "No valid joystick TXmode settings key for selected vehicle";
             return;
         }
+    } else {
+        _txModeSettingsKey = nullptr;
+    }
+}
 
+void Joystick::_activeVehicleChanged(Vehicle* activeVehicle)
+{
+    _updateTXModeSettingsKey(activeVehicle);
+
+    if(activeVehicle) {
         QSettings settings;
         settings.beginGroup(_settingsGroup);
         int mode = settings.value(_txModeSettingsKey, activeVehicle->firmwarePlugin()->defaultJoystickTXMode()).toInt();
@@ -151,8 +188,10 @@ void Joystick::_loadSettings(void)
 
     settings.beginGroup(_settingsGroup);
 
-    if(_txModeSettingsKey)
-        _transmitterMode = settings.value(_txModeSettingsKey, 2).toInt();
+    Vehicle* activeVehicle = _multiVehicleManager->activeVehicle();
+
+    if(_txModeSettingsKey && activeVehicle)
+        _transmitterMode = settings.value(_txModeSettingsKey, activeVehicle->firmwarePlugin()->defaultJoystickTXMode()).toInt();
 
     settings.beginGroup(_name);
 
@@ -165,8 +204,10 @@ void Joystick::_loadSettings(void)
     _exponential = settings.value(_exponentialSettingsKey, 0).toFloat();
     _accumulator = settings.value(_accumulatorSettingsKey, false).toBool();
     _deadband = settings.value(_deadbandSettingsKey, false).toBool();
+    _circleCorrection = settings.value(_circleCorrectionSettingsKey, false).toBool();
+    _frequency = settings.value(_frequencySettingsKey, 25.0f).toFloat();
 
-    _throttleMode = (ThrottleMode_t)settings.value(_throttleModeSettingsKey, ThrottleModeCenterZero).toInt(&convertOk);
+    _throttleMode = (ThrottleMode_t)settings.value(_throttleModeSettingsKey, ThrottleModeDownZero).toInt(&convertOk);
     badSettings |= !convertOk;
 
     qCDebug(JoystickLog) << "_loadSettings calibrated:txmode:throttlemode:exponential:deadband:badsettings" << _calibrated << _transmitterMode << _throttleMode << _exponential << _deadband << badSettings;
@@ -241,9 +282,11 @@ void Joystick::_saveSettings(void)
     settings.setValue(_exponentialSettingsKey, _exponential);
     settings.setValue(_accumulatorSettingsKey, _accumulator);
     settings.setValue(_deadbandSettingsKey, _deadband);
+    settings.setValue(_circleCorrectionSettingsKey, _circleCorrection);
+    settings.setValue(_frequencySettingsKey, _frequency);
     settings.setValue(_throttleModeSettingsKey, _throttleMode);
 
-    qCDebug(JoystickLog) << "_saveSettings calibrated:throttlemode:deadband:txmode" << _calibrated << _throttleMode << _deadband << _transmitterMode;
+    qCDebug(JoystickLog) << "_saveSettings calibrated:throttlemode:deadband:txmode" << _calibrated << _throttleMode << _deadband << _circleCorrection << _transmitterMode;
 
     QString minTpl  ("Axis%1Min");
     QString maxTpl  ("Axis%1Max");
@@ -417,7 +460,7 @@ void Joystick::run(void)
             }
         }
 
-        if (_calibrationMode != CalibrationModeCalibrating && _calibrated) {
+        if (_activeVehicle->joystickEnabled() && !_calibrationMode && _calibrated) {
             int     axis = _rgFunctionAxis[rollFunction];
             float   roll = _adjustRange(_rgAxisValues[axis], _rgCalibration[axis], _deadband);
 
@@ -439,17 +482,19 @@ void Joystick::run(void)
                 throttle = throttle_accu;
             }
 
-            float roll_limited = std::max(static_cast<float>(-M_PI_4), std::min(roll, static_cast<float>(M_PI_4)));
-            float pitch_limited = std::max(static_cast<float>(-M_PI_4), std::min(pitch, static_cast<float>(M_PI_4)));
-            float yaw_limited = std::max(static_cast<float>(-M_PI_4), std::min(yaw, static_cast<float>(M_PI_4)));
-            float throttle_limited = std::max(static_cast<float>(-M_PI_4), std::min(throttle, static_cast<float>(M_PI_4)));
+            if ( _circleCorrection ) {
+                float roll_limited = std::max(static_cast<float>(-M_PI_4), std::min(roll, static_cast<float>(M_PI_4)));
+                float pitch_limited = std::max(static_cast<float>(-M_PI_4), std::min(pitch, static_cast<float>(M_PI_4)));
+                float yaw_limited = std::max(static_cast<float>(-M_PI_4), std::min(yaw, static_cast<float>(M_PI_4)));
+                float throttle_limited = std::max(static_cast<float>(-M_PI_4), std::min(throttle, static_cast<float>(M_PI_4)));
 
-            // Map from unit circle to linear range and limit
-            roll =      std::max(-1.0f, std::min(tanf(asinf(roll_limited)), 1.0f));
-            pitch =     std::max(-1.0f, std::min(tanf(asinf(pitch_limited)), 1.0f));
-            yaw =       std::max(-1.0f, std::min(tanf(asinf(yaw_limited)), 1.0f));
-            throttle =  std::max(-1.0f, std::min(tanf(asinf(throttle_limited)), 1.0f));
-            
+                // Map from unit circle to linear range and limit
+                roll =      std::max(-1.0f, std::min(tanf(asinf(roll_limited)), 1.0f));
+                pitch =     std::max(-1.0f, std::min(tanf(asinf(pitch_limited)), 1.0f));
+                yaw =       std::max(-1.0f, std::min(tanf(asinf(yaw_limited)), 1.0f));
+                throttle =  std::max(-1.0f, std::min(tanf(asinf(throttle_limited)), 1.0f));
+            }
+
             if ( _exponential != 0 ) {
                 // Exponential (0% to -50% range like most RC radios)
                 //_exponential is set by a slider in joystickConfig.qml
@@ -462,18 +507,14 @@ void Joystick::run(void)
 
             // Adjust throttle to 0:1 range
             if (_throttleMode == ThrottleModeCenterZero && _activeVehicle->supportsThrottleModeCenterZero()) {
-                throttle = std::max(0.0f, throttle);
+                if (!_activeVehicle->supportsNegativeThrust() || !_negativeThrust) {
+                    throttle = std::max(0.0f, throttle);
+                }
             } else {
                 throttle = (throttle + 1.0f) / 2.0f;
             }
 
             // Set up button pressed information
-
-            // We only send the buttons the firmwware has reserved
-            int reservedButtonCount = _activeVehicle->manualControlReservedButtonCount();
-            if (reservedButtonCount == -1) {
-                reservedButtonCount = _totalButtonCount;
-            }
 
             quint16 newButtonBits = 0;      // New set of button which are down
             quint16 buttonPressedBits = 0;  // Buttons pressed for manualControl signal
@@ -489,12 +530,9 @@ void Joystick::run(void)
                         // Button was up last time through, but is now down which indicates a button press
                         qCDebug(JoystickLog) << "button triggered" << buttonIndex;
 
-                        if (buttonIndex >= reservedButtonCount) {
-                            // Button is above firmware reserved set
-                            QString buttonAction =_rgButtonActions[buttonIndex];
-                            if (!buttonAction.isEmpty()) {
-                                _buttonAction(buttonAction);
-                            }
+                        QString buttonAction =_rgButtonActions[buttonIndex];
+                        if (!buttonAction.isEmpty()) {
+                            _buttonAction(buttonAction);
                         }
                     }
 
@@ -507,11 +545,13 @@ void Joystick::run(void)
 
             qCDebug(JoystickValuesLog) << "name:roll:pitch:yaw:throttle" << name() << roll << -pitch << yaw << throttle;
 
+            // NOTE: The buttonPressedBits going to MANUAL_CONTROL are currently used by ArduSub.
             emit manualControl(roll, -pitch, yaw, throttle, buttonPressedBits, _activeVehicle->joystickMode());
         }
 
-        // Sleep, update rate of joystick is approx. 25 Hz (1000 ms / 25 = 40 ms)
-        QGC::SLEEP::msleep(40);
+        // Sleep. Update rate of joystick is by default 25 Hz
+        int mswait = (int)(1000.0f / _frequency);
+        QGC::SLEEP::msleep(mswait);
     }
 
     _close();
@@ -621,13 +661,14 @@ int Joystick::getFunctionAxis(AxisFunction_t function)
 QStringList Joystick::actions(void)
 {
     QStringList list;
-
-    list << "Arm" << "Disarm";
-
+    list << _buttonActionArm << _buttonActionDisarm;
     if (_activeVehicle) {
         list << _activeVehicle->flightModes();
     }
-
+    list << _buttonActionVTOLFixedWing << _buttonActionVTOLMultiRotor;
+    list << _buttonActionZoomIn << _buttonActionZoomOut;
+    list << _buttonActionNextStream << _buttonActionPreviousStream;
+    list << _buttonActionNextCamera << _buttonActionPreviousCamera;
     return list;
 }
 
@@ -687,6 +728,22 @@ void Joystick::setThrottleMode(int mode)
     emit throttleModeChanged(_throttleMode);
 }
 
+bool Joystick::negativeThrust(void)
+{
+    return _negativeThrust;
+}
+
+void Joystick::setNegativeThrust(bool allowNegative)
+{
+    if (_negativeThrust == allowNegative) {
+        return;
+    }
+    _negativeThrust = allowNegative;
+
+    _saveSettings();
+    emit negativeThrustChanged(_negativeThrust);
+}
+
 float Joystick::exponential(void)
 {
     return _exponential;
@@ -725,37 +782,47 @@ void Joystick::setDeadband(bool deadband)
     _saveSettings();
 }
 
-void Joystick::startCalibrationMode(CalibrationMode_t mode)
+bool Joystick::circleCorrection(void)
 {
-    if (mode == CalibrationModeOff) {
-        qWarning() << "Incorrect mode CalibrationModeOff";
-        return;
-    }
+    return _circleCorrection;
+}
 
-    _calibrationMode = mode;
+void Joystick::setCircleCorrection(bool circleCorrection)
+{
+    _circleCorrection = circleCorrection;
 
-    if (!isRunning()) {
+    _saveSettings();
+    emit circleCorrectionChanged(_circleCorrection);
+}
+
+float Joystick::frequency()
+{
+    return _frequency;
+}
+
+void Joystick::setFrequency(float val)
+{
+    //-- Arbitrary limits
+    if(val < 0.25f)  val = 0.25f;
+    if(val > 100.0f) val = 100.0f;
+    _frequency = val;
+    _saveSettings();
+    emit frequencyChanged();
+}
+
+void Joystick::setCalibrationMode(bool calibrating)
+{
+    _calibrationMode = calibrating;
+
+    if (calibrating && !isRunning()) {
         _pollingStartedForCalibration = true;
         startPolling(_multiVehicleManager->activeVehicle());
     }
-}
-
-void Joystick::stopCalibrationMode(CalibrationMode_t mode)
-{
-    if (mode == CalibrationModeOff) {
-        qWarning() << "Incorrect mode: CalibrationModeOff";
-        return;
-    }
-
-    if (mode == CalibrationModeCalibrating) {
-        _calibrationMode = CalibrationModeMonitor;
-    } else {
-        _calibrationMode = CalibrationModeOff;
-        if (_pollingStartedForCalibration) {
-            stopPolling();
-        }
+    else if (_pollingStartedForCalibration) {
+        stopPolling();
     }
 }
+
 
 void Joystick::_buttonAction(const QString& action)
 {
@@ -763,12 +830,22 @@ void Joystick::_buttonAction(const QString& action)
         return;
     }
 
-    if (action == "Arm") {
+    if (action == _buttonActionArm) {
         _activeVehicle->setArmed(true);
-    } else if (action == "Disarm") {
+    } else if (action == _buttonActionDisarm) {
         _activeVehicle->setArmed(false);
+    } else if (action == _buttonActionVTOLFixedWing) {
+        _activeVehicle->setVtolInFwdFlight(true);
+    } else if (action == _buttonActionVTOLMultiRotor) {
+        _activeVehicle->setVtolInFwdFlight(false);
     } else if (_activeVehicle->flightModes().contains(action)) {
         _activeVehicle->setFlightMode(action);
+    } else if(action == _buttonActionZoomIn || action == _buttonActionZoomOut) {
+        emit stepZoom(action == _buttonActionZoomIn ? 1 : -1);
+    } else if(action == _buttonActionNextStream || action == _buttonActionPreviousStream) {
+        emit stepStream(action == _buttonActionNextStream ? 1 : -1);
+    } else if(action == _buttonActionNextCamera || action == _buttonActionPreviousCamera) {
+        emit stepCamera(action == _buttonActionNextCamera ? 1 : -1);
     } else {
         qCDebug(JoystickLog) << "_buttonAction unknown action:" << action;
     }

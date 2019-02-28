@@ -17,8 +17,6 @@
 #include "FirmwarePlugin.h"
 #include "QGCLoggingCategory.h"
 #include "APMParameterMetaData.h"
-#include "APMGeoFenceManager.h"
-#include "APMRallyPointManager.h"
 
 #include <QAbstractSocket>
 
@@ -72,31 +70,40 @@ class APMFirmwarePlugin : public FirmwarePlugin
 public:
     // Overrides from FirmwarePlugin
 
-    QList<VehicleComponent*> componentsForVehicle(AutoPilotPlugin* vehicle) final;
-    QList<MAV_CMD> supportedMissionCommands(void) final;
+    QList<VehicleComponent*> componentsForVehicle(AutoPilotPlugin* vehicle) override;
+    QList<MAV_CMD> supportedMissionCommands(void) override;
 
-    AutoPilotPlugin*    autopilotPlugin                 (Vehicle* vehicle) final;
-    bool                isCapable                       (const Vehicle *vehicle, FirmwareCapabilities capabilities);
-    QStringList         flightModes                     (Vehicle* vehicle) final;
-    QString             flightMode                      (uint8_t base_mode, uint32_t custom_mode) const final;
-    bool                setFlightMode                   (const QString& flightMode, uint8_t* base_mode, uint32_t* custom_mode) final;
-    bool                isGuidedMode                    (const Vehicle* vehicle) const final;
-    void                pauseVehicle                    (Vehicle* vehicle);
-    int                 manualControlReservedButtonCount(void);
-    bool                adjustIncomingMavlinkMessage    (Vehicle* vehicle, mavlink_message_t* message) final;
-    void                adjustOutgoingMavlinkMessage    (Vehicle* vehicle, LinkInterface* outgoingLink, mavlink_message_t* message) final;
-    void                initializeVehicle               (Vehicle* vehicle) final;
-    bool                sendHomePositionToVehicle       (void) final;
-    void                addMetaDataToFact               (QObject* parameterMetaData, Fact* fact, MAV_TYPE vehicleType) final;
-    QString             missionCommandOverrides         (MAV_TYPE vehicleType) const;
-    QString             getVersionParam                 (void) final { return QStringLiteral("SYSID_SW_MREV"); }
-    QString             internalParameterMetaDataFile   (Vehicle* vehicle) final;
-    void                getParameterMetaDataVersionInfo (const QString& metaDataFile, int& majorVersion, int& minorVersion) final { APMParameterMetaData::getParameterMetaDataVersionInfo(metaDataFile, majorVersion, minorVersion); }
-    QObject*            loadParameterMetaData           (const QString& metaDataFile);
-    GeoFenceManager*    newGeoFenceManager              (Vehicle* vehicle) { return new APMGeoFenceManager(vehicle); }
-    RallyPointManager*  newRallyPointManager            (Vehicle* vehicle) { return new APMRallyPointManager(vehicle); }
-    QString             brandImageIndoor                (const Vehicle* vehicle) const { Q_UNUSED(vehicle); return QStringLiteral("/qmlimages/APM/BrandImage"); }
-    QString             brandImageOutdoor               (const Vehicle* vehicle) const { Q_UNUSED(vehicle); return QStringLiteral("/qmlimages/APM/BrandImage"); }
+    AutoPilotPlugin*    autopilotPlugin                 (Vehicle* vehicle) override;
+    bool                isCapable                       (const Vehicle *vehicle, FirmwareCapabilities capabilities) override;
+    void                setGuidedMode                   (Vehicle* vehicle, bool guidedMode) override;
+    void                guidedModeTakeoff               (Vehicle* vehicle, double altitudeRel) override;
+    void                guidedModeGotoLocation          (Vehicle* vehicle, const QGeoCoordinate& gotoCoord) override;
+    double              minimumTakeoffAltitude          (Vehicle* vehicle) override;
+    void                startMission                    (Vehicle* vehicle) override;
+    QStringList         flightModes                     (Vehicle* vehicle) override;
+    QString             flightMode                      (uint8_t base_mode, uint32_t custom_mode) const override;
+    bool                setFlightMode                   (const QString& flightMode, uint8_t* base_mode, uint32_t* custom_mode) override;
+    bool                isGuidedMode                    (const Vehicle* vehicle) const override;
+    QString             gotoFlightMode                  (void) const override { return QStringLiteral("Guided"); }
+    QString             rtlFlightMode                   (void) const override { return QString("RTL"); }
+    QString             missionFlightMode               (void) const override { return QString("Auto"); }
+    void                pauseVehicle                    (Vehicle* vehicle) override;
+    void                guidedModeRTL                   (Vehicle* vehicle) override;
+    void                guidedModeChangeAltitude        (Vehicle* vehicle, double altitudeChange) override;
+    bool                adjustIncomingMavlinkMessage    (Vehicle* vehicle, mavlink_message_t* message) override;
+    void                adjustOutgoingMavlinkMessage    (Vehicle* vehicle, LinkInterface* outgoingLink, mavlink_message_t* message) override;
+    virtual void        initializeStreamRates           (Vehicle* vehicle);
+    void                initializeVehicle               (Vehicle* vehicle) override;
+    bool                sendHomePositionToVehicle       (void) override;
+    void                addMetaDataToFact               (QObject* parameterMetaData, Fact* fact, MAV_TYPE vehicleType) override;
+    QString             missionCommandOverrides         (MAV_TYPE vehicleType) const override;
+    QString             getVersionParam                 (void) override { return QStringLiteral("SYSID_SW_MREV"); }
+    QString             internalParameterMetaDataFile   (Vehicle* vehicle) override;
+    void                getParameterMetaDataVersionInfo (const QString& metaDataFile, int& majorVersion, int& minorVersion) override { APMParameterMetaData::getParameterMetaDataVersionInfo(metaDataFile, majorVersion, minorVersion); }
+    QObject*            loadParameterMetaData           (const QString& metaDataFile) override;
+    QString             brandImageIndoor                (const Vehicle* vehicle) const override { Q_UNUSED(vehicle); return QStringLiteral("/qmlimages/APM/BrandImage"); }
+    QString             brandImageOutdoor               (const Vehicle* vehicle) const override { Q_UNUSED(vehicle); return QStringLiteral("/qmlimages/APM/BrandImage"); }
+    bool                supportsTerrainFrame            (void) const override { return true; }
 
 protected:
     /// All access to singleton is through stack specific implementation
@@ -112,21 +119,36 @@ private:
     void _adjustSeverity(mavlink_message_t* message) const;
     void _adjustCalibrationMessageSeverity(mavlink_message_t* message) const;
     static bool _isTextSeverityAdjustmentNeeded(const APMFirmwareVersion& firmwareVersion);
-    void _setInfoSeverity(mavlink_message_t* message) const;
-    QString _getMessageText(mavlink_message_t* message) const;
+    void _setInfoSeverity(mavlink_message_t* message, bool longVersion) const;
+    QString _getMessageText(mavlink_message_t* message, bool longVersion) const;
     void _handleIncomingParamValue(Vehicle* vehicle, mavlink_message_t* message);
-    bool _handleIncomingStatusText(Vehicle* vehicle, mavlink_message_t* message);
+    bool _handleIncomingStatusText(Vehicle* vehicle, mavlink_message_t* message, bool longVersion);
     void _handleIncomingHeartbeat(Vehicle* vehicle, mavlink_message_t* message);
     void _handleOutgoingParamSet(Vehicle* vehicle, LinkInterface* outgoingLink, mavlink_message_t* message);
-    void _soloVideoHandshake(Vehicle* vehicle);
+    void _soloVideoHandshake(Vehicle* vehicle, bool originalSoloFirmware);
+    bool _guidedModeTakeoff(Vehicle* vehicle, double altitudeRel);
+    void _handleRCChannels(Vehicle* vehicle, mavlink_message_t* message);
+    void _handleRCChannelsRaw(Vehicle* vehicle, mavlink_message_t* message);
+    QString _getLatestVersionFileUrl(Vehicle* vehicle) override;
+    QString _versionRegex() override;
 
-    bool                    _textSeverityAdjustmentNeeded;
+    // Any instance data here must be global to all vehicles
+    // Vehicle specific data should go into APMFirmwarePluginInstanceData
+
     QList<APMCustomMode>    _supportedModes;
-    QMap<QString, QTime>    _noisyPrearmMap;
 
     static const char*      _artooIP;
     static const int        _artooVideoHandshakePort;
+};
 
+class APMFirmwarePluginInstanceData : public QObject
+{
+    Q_OBJECT
+
+public:
+    APMFirmwarePluginInstanceData(QObject* parent = NULL);
+
+    bool                    textSeverityAdjustmentNeeded;
 };
 
 #endif

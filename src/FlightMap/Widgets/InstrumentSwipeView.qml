@@ -29,6 +29,7 @@ Item {
 
     function showPage(pageIndex) {
         pageRow.x = -(pageIndex * _pageWidth)
+        _currentPage = pageIndex
     }
 
     function showNextPage() {
@@ -38,6 +39,10 @@ Item {
             _currentPage++
         }
         showPage(_currentPage)
+    }
+
+    function currentPage() {
+        return _currentPage
     }
 
     MouseArea {

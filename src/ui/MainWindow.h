@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *   (c) 2009-2018 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -15,8 +15,7 @@
  *
  */
 
-#ifndef _MAINWINDOW_H_
-#define _MAINWINDOW_H_
+#pragma once
 
 #ifdef __mobile__
 #error Should not be include in mobile build
@@ -40,10 +39,6 @@
 #include "QGCQmlWidgetHolder.h"
 
 #include "ui_MainWindow.h"
-
-#if (defined QGC_MOUSE_ENABLED_WIN) | (defined QGC_MOUSE_ENABLED_LINUX)
-    #include "Mouse6dofInput.h"
-#endif // QGC_MOUSE_ENABLED_WIN
 
 class QGCStatusBar;
 class Linecharts;
@@ -80,7 +75,7 @@ public:
     void saveLastUsedConnection(const QString connection);
 
     // Called from MainWindow.qml when the user accepts the window close dialog
-    Q_INVOKABLE void reallyClose(void);
+    void _reallyClose(void);
 
     /// @return Root qml object of main window QML
     QObject* rootQmlObject(void);
@@ -104,14 +99,10 @@ signals:
     void initStatusChanged(const QString& message, int alignment, const QColor &color);
     /** Emitted when any value changes from any source */
     void valueChanged(const int uasId, const QString& name, const QString& unit, const QVariant& value, const quint64 msec);
+    void reallyClose(void);
 
     // Used for unit tests to know when the main window closes
     void mainWindowClosed(void);
-
-#ifdef QGC_MOUSE_ENABLED_LINUX
-    /** @brief Forward X11Event to catch 3DMouse inputs */
-    void x11EventOccured(XEvent *event);
-#endif //QGC_MOUSE_ENABLED_LINUX
 
 public:
     QGCMAVLinkLogPlayer* getLogPlayer()
@@ -127,19 +118,12 @@ protected:
 
     QSettings settings;
 
-    QPointer<MAVLinkDecoder> mavlinkDecoder;
     QGCMAVLinkLogPlayer* logPlayer;
 #ifdef QGC_MOUSE_ENABLED_WIN
     /** @brief 3d Mouse support (WIN only) */
     Mouse3DInput* mouseInput;               ///< 3dConnexion 3dMouse SDK
     Mouse6dofInput* mouse;                  ///< Implementation for 3dMouse input
 #endif // QGC_MOUSE_ENABLED_WIN
-
-#ifdef QGC_MOUSE_ENABLED_LINUX
-    /** @brief Reimplementation of X11Event to handle 3dMouse Events (magellan) */
-    bool x11Event(XEvent *event);
-    Mouse6dofInput* mouse;                  ///< Implementation for 3dMouse input
-#endif // QGC_MOUSE_ENABLED_LINUX
 
     /** User interface actions **/
     QAction* connectUASAct;
@@ -181,7 +165,9 @@ private:
     void _showDockWidget(const QString &name, bool show);
     void _loadVisibleWidgetsSettings(void);
     void _storeVisibleWidgetsSettings(void);
+    MAVLinkDecoder* _mavLinkDecoderInstance(void);
 
+    MAVLinkDecoder*         _mavlinkDecoder;
     bool                    _lowPowerMode;           ///< If enabled, QGC reduces the update rates of all widgets
     bool                    _showStatusBar;
     QVBoxLayout*            _centralLayout;
@@ -194,4 +180,3 @@ private:
     QString _getWindowGeometryKey();
 };
 
-#endif /* _MAINWINDOW_H_ */

@@ -22,27 +22,28 @@ import QGroundControl.FlightMap     1.0
 Item {
     id: _root
 
-    property var map    ///< Map control to place item in
+    property var map        ///< Map control to place item in
+    property var qgcView    ///< QGCView to use for popping dialogs
 
     property var _missionItem:      object
-    property var _mapPolygon:       object.mapPolygon
-    property var _gridComponent
+    property var _mapPolygon:       object.surveyAreaPolygon
+    property var _visualTransectsComponent
     property var _entryCoordinate
     property var _exitCoordinate
 
     signal clicked(int sequenceNumber)
 
     function _addVisualElements() {
-        _gridComponent = gridComponent.createObject(map)
+        _visualTransectsComponent = visualTransectsComponent.createObject(map)
         _entryCoordinate = entryPointComponent.createObject(map)
         _exitCoordinate = exitPointComponent.createObject(map)
-        map.addMapItem(_gridComponent)
+        map.addMapItem(_visualTransectsComponent)
         map.addMapItem(_entryCoordinate)
         map.addMapItem(_exitCoordinate)
     }
 
     function _destroyVisualElements() {
-        _gridComponent.destroy()
+        _visualTransectsComponent.destroy()
         _entryCoordinate.destroy()
         _exitCoordinate.destroy()
     }
@@ -89,6 +90,7 @@ Item {
 
     QGCMapPolygonVisuals {
         id:                 mapPolygonVisuals
+        qgcView:            _root.qgcView
         mapControl:         map
         mapPolygon:         _mapPolygon
         interactive:        _missionItem.isCurrentItem
@@ -98,14 +100,14 @@ Item {
         interiorOpacity:    0.5
     }
 
-    // Survey grid lines
+    // Transect lines
     Component {
-        id: gridComponent
+        id: visualTransectsComponent
 
         MapPolyline {
             line.color: "white"
             line.width: 2
-            path:       _missionItem.gridPoints
+            path:       _missionItem.visualTransectPoints
         }
     }
 

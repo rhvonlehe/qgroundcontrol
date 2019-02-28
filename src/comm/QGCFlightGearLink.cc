@@ -544,15 +544,9 @@ bool QGCFlightGearLink::parseUIArguments(QString uiArgs, QStringList& argList)
         } else if (chr == '\"') {
             // Flip the state of being in a quoted string. Note that we specifically do not add the
             // quote to the string. This replicates standards command line parsing behaviour.
-            if (chr == '\"') {
-                inQuotedString = !inQuotedString;
-            }
+            inQuotedString = !inQuotedString;
             previousSpace = false;
         } else {
-            // Flip the state of being in a quoted string
-            if (chr == '\"') {
-                inQuotedString = !inQuotedString;
-            }
             previousSpace = false;
             currentArg += chr;
         }
@@ -631,7 +625,7 @@ bool QGCFlightGearLink::connectSimulation()
     // Now set the FG arguments to the arguments from the UI
     _fgArgList = uiArgList;
 
-#if defined __macos__
+#if defined Q_OS_MAC
     // Mac installs will default to the /Applications folder 99% of the time. Anything other than
     // that is pretty non-standard so we don't try to get fancy beyond hardcoding that path.
     fgAppDir.setPath("/Applications");
@@ -962,7 +956,7 @@ void QGCFlightGearLink::_printFgfsOutput(void)
    QByteArray byteArray = _fgProcess->readAllStandardOutput();
    QStringList strLines = QString(byteArray).split("\n");
 
-   foreach (const QString &line, strLines){
+   for (const QString &line: strLines){
     qDebug() << line;
    }
 }
@@ -974,7 +968,7 @@ void QGCFlightGearLink::_printFgfsError(void)
    QByteArray byteArray = _fgProcess->readAllStandardError();
    QStringList strLines = QString(byteArray).split("\n");
 
-   foreach (const QString &line, strLines){
+   for (const QString &line: strLines){
     qDebug() << line;
    }
 }

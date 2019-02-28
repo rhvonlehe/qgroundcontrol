@@ -20,7 +20,7 @@ QGCFlickable {
         width:  parent.width
         height: innerEditorRect.y + innerEditorRect.height + (_margin * 2)
         radius: _radius
-        color:  qgcPal.buttonHighlight
+        color:  qgcPal.missionItemEditor
 
         QGCLabel {
             id:                 editorLabel
@@ -28,7 +28,6 @@ QGCFlickable {
             anchors.left:       parent.left
             anchors.top:        parent.top
             text:               qsTr("Rally Points")
-            color:              "black"
         }
 
         Rectangle {
@@ -59,7 +58,7 @@ QGCFlickable {
                 anchors.right:      parent.right
                 anchors.top:        infoLabel.bottom
                 wrapMode:           Text.WordWrap
-                text:               controller.rallyPointsSupported ?
+                text:               controller.supported ?
                                         qsTr("Click in the map to add new rally points.") :
                                         qsTr("This vehicle does not support Rally Points.")
             }

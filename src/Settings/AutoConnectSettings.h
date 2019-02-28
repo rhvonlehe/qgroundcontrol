@@ -7,50 +7,29 @@
  *
  ****************************************************************************/
 
-#ifndef AutoConnectSettings_H
-#define AutoConnectSettings_H
+#pragma once
 
 #include "SettingsGroup.h"
 
 class AutoConnectSettings : public SettingsGroup
 {
     Q_OBJECT
-    
+
 public:
-    AutoConnectSettings(QObject* parent = NULL);
+    AutoConnectSettings(QObject* parent = nullptr);
 
-    Q_PROPERTY(Fact* autoConnectUDP         READ autoConnectUDP         CONSTANT)
-    Q_PROPERTY(Fact* autoConnectPixhawk     READ autoConnectPixhawk     CONSTANT)
-    Q_PROPERTY(Fact* autoConnectSiKRadio    READ autoConnectSiKRadio    CONSTANT)
-    Q_PROPERTY(Fact* autoConnectPX4Flow     READ autoConnectPX4Flow     CONSTANT)
-    Q_PROPERTY(Fact* autoConnectRTKGPS      READ autoConnectRTKGPS      CONSTANT)
-    Q_PROPERTY(Fact* autoConnectLibrePilot  READ autoConnectLibrePilot  CONSTANT)
+    DEFINE_SETTING_NAME_GROUP()
 
-    Fact* autoConnectUDP        (void);
-    Fact* autoConnectPixhawk    (void);
-    Fact* autoConnectSiKRadio   (void);
-    Fact* autoConnectPX4Flow    (void);
-    Fact* autoConnectRTKGPS     (void);
-    Fact* autoConnectLibrePilot (void);
-
-    static const char* autoConnectSettingsGroupName;
-
-    static const char* autoConnectUDPSettingsName;
-    static const char* autoConnectPixhawkSettingsName;
-    static const char* autoConnectSiKRadioSettingsName;
-    static const char* autoConnectPX4FlowSettingsName;
-    static const char* autoConnectRTKGPSSettingsName;
-    static const char* autoConnectLibrePilotSettingsName;
-
-private:
-    SettingsFact* _autoConnectUDPFact;
-    SettingsFact* _autoConnectPixhawkFact;
-    SettingsFact* _autoConnectSiKRadioFact;
-    SettingsFact* _autoConnectPX4FlowFact;
-    SettingsFact* _autoConnectRTKGPSFact;
-    SettingsFact* _autoConnectLibrePilotFact;
-
-    static const char* _settingsGroup;
+    DEFINE_SETTINGFACT(autoConnectUDP)
+    DEFINE_SETTINGFACT(autoConnectPixhawk)
+    DEFINE_SETTINGFACT(autoConnectSiKRadio)
+    DEFINE_SETTINGFACT(autoConnectPX4Flow)
+    DEFINE_SETTINGFACT(autoConnectRTKGPS)
+    DEFINE_SETTINGFACT(autoConnectLibrePilot)
+    DEFINE_SETTINGFACT(autoConnectNmeaPort)
+    DEFINE_SETTINGFACT(autoConnectNmeaBaud)
+    DEFINE_SETTINGFACT(udpListenPort)
+    DEFINE_SETTINGFACT(udpTargetHostIP)
+    DEFINE_SETTINGFACT(udpTargetHostPort)
+    DEFINE_SETTINGFACT(nmeaUdpPort)
 };
-
-#endif

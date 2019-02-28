@@ -27,6 +27,8 @@ SetupPage {
     pageName:           qsTr("Joystick")
     pageDescription:    qsTr("Joystick Setup is used to configure a calibrate joysticks.")
 
+    readonly property real _maxButtons: 16
+
     Connections {
         target: joystickManager
         onAvailableJoysticksChanged: {
@@ -83,6 +85,8 @@ SetupPage {
                 Item {
                     property int axisValue: 0
                     property int deadbandValue: 0
+                    property bool narrowIndicator: false
+                    property color deadbandColor: "#8c161a"
 
                     property color          __barColor:             qgcPal.windowShade
 
@@ -102,7 +106,7 @@ SetupPage {
                         x:                      _deadbandPosition
                         width:                  _deadbandWidth
                         height:                 parent.height / 2
-                        color:                  "#8c161a"
+                        color:                  deadbandColor
                         visible:                controller.deadbandToggle
 
                         property real _percentDeadband:    ((2 * deadbandValue) / (32768.0 * 2))
@@ -121,8 +125,8 @@ SetupPage {
                     // Indicator
                     Rectangle {
                         anchors.verticalCenter: parent.verticalCenter
-                        width:                  parent.height * 0.75
-                        height:                 width
+                        width:                  parent.narrowIndicator ?  height/6 : height
+                        height:                 parent.height * 0.75
                         x:                      (reversed ? (parent.width - _indicatorPosition) : _indicatorPosition) - (width / 2)
                         radius:                 width / 2
                         color:                  qgcPal.text
@@ -294,7 +298,7 @@ SetupPage {
                         Connections {
                             target: _activeJoystick
 
-                            onManualControl: throttleLoader.item.axisValue = (-2*throttle+1)*32768.0
+                            onManualControl: throttleLoader.item.axisValue = _activeJoystick.negativeThrust ? -throttle*32768.0 : (-2*throttle+1)*32768.0
                         }
                     }
                 } // Column - Attitude Control labels
@@ -362,9 +366,16 @@ SetupPage {
                                 id:         enabledCheckBox
                                 enabled:    _activeJoystick ? _activeJoystick.calibrated : false
                                 text:       _activeJoystick ? _activeJoystick.calibrated ? qsTr("Enable joystick input") : qsTr("Enable not allowed (Calibrate First)") : ""
-                                checked:    _activeVehicle.joystickEnabled
-
                                 onClicked:  _activeVehicle.joystickEnabled = checked
+                                Component.onCompleted: checked = _activeVehicle.joystickEnabled
+
+                                Connections {
+                                    target: _activeVehicle
+
+                                    onJoystickEnabledChanged: {
+                                        enabledCheckBox.checked = _activeVehicle.joystickEnabled
+                                    }
+                                }
 
                                 Connections {
                                     target: joystickManager
@@ -451,6 +462,15 @@ SetupPage {
 
                                     onClicked: _activeJoystick.throttleMode = 1
                                 }
+
+                                QGCCheckBox {
+                                    visible:        _activeVehicle.supportsNegativeThrust
+                                    id:             negativeThrust
+                                    text:           qsTr("Allow negative Thrust")
+                                    enabled:        _activeJoystick.negativeThrust = _activeVehicle.supportsNegativeThrust
+                                    checked:        _activeJoystick ? _activeJoystick.negativeThrust : false
+                                    onClicked:      _activeJoystick.negativeThrust = checked
+                                }
                             }
 
                             Column {
@@ -515,6 +535,40 @@ SetupPage {
                                 width:      parent.width
                                 spacing:    ScreenTools.defaultFontPixelWidth
                                 visible:    advancedSettings.checked
+                                QGCLabel {
+                                    text:       qsTr("Message frequency (Hz):")
+                                    anchors.verticalCenter: parent.verticalCenter
+                                }
+                                QGCTextField {
+                                    text:       _activeJoystick.frequency
+                                    validator:  DoubleValidator { bottom: 0.25; top: 100.0; }
+                                    inputMethodHints: Qt.ImhFormattedNumbersOnly
+                                    onEditingFinished: {
+                                        _activeJoystick.frequency = parseFloat(text)
+                                    }
+                                }
+                            }
+
+                            Row {
+                                width:      parent.width
+                                spacing:    ScreenTools.defaultFontPixelWidth
+                                visible:    advancedSettings.checked
+                                QGCCheckBox {
+                                    id:         joystickCircleCorrection
+                                    checked:    _activeVehicle.joystickMode != 0
+                                    text:       qsTr("Enable circle correction")
+
+                                    Component.onCompleted: checked = _activeJoystick.circleCorrection
+                                    onClicked: {
+                                        _activeJoystick.circleCorrection = checked
+                                    }
+                                }
+                            }
+
+                            Row {
+                                width:      parent.width
+                                spacing:    ScreenTools.defaultFontPixelWidth
+                                visible:    advancedSettings.checked
 
                                 QGCCheckBox {
                                     id:         deadband
@@ -522,6 +576,21 @@ SetupPage {
                                     text:       qsTr("Deadbands")
 
                                     onClicked:  controller.deadbandToggle = checked
+                                }
+                            }
+                            Row{
+                                width: parent.width
+                                spacing: ScreenTools.defaultFontPixelWidth
+                                visible: advancedSettings.checked
+                                QGCLabel{
+                                    width:       parent.width * 0.85
+                                    font.pointSize:     ScreenTools.smallFontPointSize
+                                    wrapMode:           Text.WordWrap
+                                    text:   qsTr("Deadband can be set during the first ") +
+                                            qsTr("step of calibration by gently wiggling each axis. ") +
+                                            qsTr("Deadband can also be adjusted by clicking and ") +
+                                            qsTr("dragging vertically on the corresponding axis monitor.")
+                                    visible: controller.deadbandToggle
                                 }
                             }
                         }
@@ -551,20 +620,13 @@ SetupPage {
                             width:      parent.width
                             spacing:    ScreenTools.defaultFontPixelHeight / 3
 
-                            QGCLabel {
-                                visible: _activeVehicle.manualControlReservedButtonCount != 0
-                                text: qsTr("Buttons 0-%1 reserved for firmware use").arg(reservedButtonCount)
-
-                                property int reservedButtonCount: _activeVehicle.manualControlReservedButtonCount == -1 ? _activeJoystick.totalButtonCount : _activeVehicle.manualControlReservedButtonCount
-                            }
-
                             Repeater {
                                 id:     buttonActionRepeater
-                                model:  _activeJoystick ? _activeJoystick.totalButtonCount : 0
+                                model:  _activeJoystick ? Math.min(_activeJoystick.totalButtonCount, _maxButtons) : 0
 
                                 Row {
                                     spacing: ScreenTools.defaultFontPixelWidth
-                                    visible: (_activeVehicle.manualControlReservedButtonCount == -1 ? false : modelData >= _activeVehicle.manualControlReservedButtonCount) && !_activeVehicle.supportsJSButton
+                                    visible: !_activeVehicle.supportsJSButton
 
                                     property bool pressed
 
@@ -627,7 +689,7 @@ SetupPage {
 
                             Repeater {
                                 id:     jsButtonActionRepeater
-                                model:  _activeJoystick ? _activeJoystick.totalButtonCount : 0
+                                model:  _activeJoystick ? Math.min(_activeJoystick.totalButtonCount, _maxButtons) : 0
 
                                 Row {
                                     spacing: ScreenTools.defaultFontPixelWidth
@@ -779,11 +841,36 @@ SetupPage {
                                 height:                 ScreenTools.defaultFontPixelHeight
                                 width:                  200
                                 sourceComponent:        axisMonitorDisplayComponent
+                                Component.onCompleted:  item.narrowIndicator = true
 
                                 property real defaultTextWidth:     ScreenTools.defaultFontPixelWidth
                                 property bool mapped:               true
                                 readonly property bool reversed:    false
+
+
+                                MouseArea {
+                                    id:             deadbandMouseArea
+                                    anchors.fill:   parent.item
+                                    enabled:        controller.deadbandToggle
+
+                                    property real startY
+
+                                    onPressed: {
+                                        startY = mouseY
+                                        parent.item.deadbandColor = "#3C6315"
+                                    }
+                                    onPositionChanged: {
+                                        var newValue = parent.item.deadbandValue + (startY - mouseY)*15
+                                        if ((newValue > 0) && (newValue <32768)){parent.item.deadbandValue=newValue;}
+                                        startY = mouseY
+                                    }
+                                    onReleased: {
+                                        controller.setDeadbandValue(modelData,parent.item.deadbandValue)
+                                        parent.item.deadbandColor = "#8c161a"
+                                    }
+                                }
                             }
+
                         }
                     }
                 } // Column - Axis Monitor

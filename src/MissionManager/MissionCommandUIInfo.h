@@ -24,7 +24,7 @@ class MissionCommandTreeTest;
 
 /// UI Information associated with a mission command (MAV_CMD) parameter
 ///
-/// MissionCommandParamInfo is used to automatically generate editing ui for a parameter assocaited with a MAV_CMD.
+/// MissionCommandParamInfo is used to automatically generate editing ui for a parameter associated with a MAV_CMD.
 ///
 /// The json format for a MissionCmdParamInfo object is:
 ///
@@ -34,7 +34,7 @@ class MissionCommandTreeTest;
 /// default         double  0.0/NaN     Default value for param. If no default value specified and nanUnchanged == true, then defaultValue is NaN.
 /// decimalPlaces   int     7           Number of decimal places to show for value
 /// enumStrings     string              Strings to show in combo box for selection
-/// enumValues      string              Values assocaited with each enum string
+/// enumValues      string              Values associated with each enum string
 /// nanUnchanged    bool    false       True: value can be set to NaN to signal unchanged
 ///
 class MissionCmdParamInfo : public QObject {
@@ -138,8 +138,11 @@ public:
     /// @return true: success, false: failure, errorString set
     bool loadJsonInfo(const QJsonObject& jsonObject, bool requireFullObject, QString& errorString);
 
-    /// Return param info for index, NULL for param should not be shown
-    const MissionCmdParamInfo* getParamInfo(int index) const;
+    /// Retruns parameter information for specified parameter
+    ///     @param index paremeter index to retrieve, 1-7
+    ///     @param showUI true: show parameter in editor, false: hide parameter in editor
+    /// @return Param info for index, NULL for none available
+    const MissionCmdParamInfo* getParamInfo(int index, bool& showUI) const;
 
 private:
     QString _loadErrorString(const QString& errorString) const;

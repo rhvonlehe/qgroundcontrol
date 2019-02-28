@@ -16,7 +16,10 @@
 
 //#define DEBUG_GOOGLE_MAPS
 
+#include "QGCApplication.h"
 #include "QGCMapEngine.h"
+#include "AppSettings.h"
+#include "SettingsManager.h"
 
 #include <QRegExp>
 #include <QNetworkReply>
@@ -29,6 +32,10 @@
 #include <QFile>
 #include <QStandardPaths>
 #endif
+
+static const unsigned char pngSignature[]   = {0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00};
+static const unsigned char jpegSignature[]  = {0xFF, 0xD8, 0xFF, 0x00};
+static const unsigned char gifSignature[]   = {0x47, 0x49, 0x46, 0x38, 0x00};
 
 //-----------------------------------------------------------------------------
 UrlFactory::UrlFactory()
@@ -72,10 +79,12 @@ UrlFactory::getImageFormat(MapType type, const QByteArray& image)
     QString format;
     if(image.size() > 2)
     {
-        if((char)image[0] == (char)0xff && (char)image[1] == (char)0xd8)
-            format = "jpg";
-        else if((char)image[0] == (char)0x89 && (char)image[1] == (char)0x50)
+        if (image.startsWith(reinterpret_cast<const char*>(pngSignature)))
             format = "png";
+        else if (image.startsWith(reinterpret_cast<const char*>(jpegSignature)))
+            format = "jpg";
+        else if (image.startsWith(reinterpret_cast<const char*>(gifSignature)))
+            format = "gif";
         else {
             switch (type) {
                 case GoogleMap:
@@ -83,29 +92,43 @@ UrlFactory::getImageFormat(MapType type, const QByteArray& image)
                 case GoogleTerrain:
                 case GoogleHybrid:
                 case BingMap:
-                case OpenStreetMap:
                 case StatkartTopo:
                     format = "png";
                     break;
+                case EniroTopo:
+                    format = "png";
+                    break;
+                /*
                 case MapQuestMap:
                 case MapQuestSat:
-                case MapBoxStreets:
-                case MapBoxLight:
-                case MapBoxDark:
-                case MapBoxSatellite:
-                case MapBoxHybrid:
-                case MapBoxWheatPaste:
-                case MapBoxStreetsBasic:
-                case MapBoxComic:
-                case MapBoxOutdoors:
-                case MapBoxRunBikeHike:
-                case MapBoxPencil:
-                case MapBoxPirates:
-                case MapBoxEmerald:
-                case MapBoxHighContrast:
+                case OpenStreetMap:
+                */
+                case MapboxStreets:
+                case MapboxLight:
+                case MapboxDark:
+                case MapboxSatellite:
+                case MapboxHybrid:
+                case MapboxWheatPaste:
+                case MapboxStreetsBasic:
+                case MapboxComic:
+                case MapboxOutdoors:
+                case MapboxRunBikeHike:
+                case MapboxPencil:
+                case MapboxPirates:
+                case MapboxEmerald:
+                case MapboxHighContrast:
                 case GoogleSatellite:
                 case BingSatellite:
                 case BingHybrid:
+                    format = "jpg";
+                    break;
+                case AirmapElevation:
+                    format = "bin";
+                    break;
+                case VWorldStreet :
+                    format = "png";
+                    break;
+                case VWorldSatellite :
                     format = "jpg";
                     break;
                 default:
@@ -124,11 +147,11 @@ UrlFactory::getTileURL(MapType type, int x, int y, int zoom, QNetworkAccessManag
     //-- Build URL
     QNetworkRequest request;
     QString url = _getURL(type, x, y, zoom, networkManager);
-    if(url.isEmpty())
+    if(url.isEmpty()) {
         return request;
+    }
     request.setUrl(QUrl(url));
     request.setRawHeader("Accept", "*/*");
-    request.setRawHeader("User-Agent", _userAgent);
     switch (type) {
 #ifndef QGC_NO_GOOGLE_MAPS
         case GoogleMap:
@@ -147,6 +170,9 @@ UrlFactory::getTileURL(MapType type, int x, int y, int zoom, QNetworkAccessManag
         case StatkartTopo:
             request.setRawHeader("Referrer", "https://www.norgeskart.no/");
             break;
+        case EniroTopo:
+            request.setRawHeader("Referrer", "https://www.eniro.se/");
+            break;
         /*
         case OpenStreetMapSurfer:
         case OpenStreetMapSurferTerrain:
@@ -157,9 +183,24 @@ UrlFactory::getTileURL(MapType type, int x, int y, int zoom, QNetworkAccessManag
             request.setRawHeader("Referrer", "https://www.openstreetmap.org/");
             break;
         */
+
+        case EsriWorldStreet:
+        case EsriWorldSatellite:
+        case EsriTerrain: {
+                QByteArray token = qgcApp()->toolbox()->settingsManager()->appSettings()->esriToken()->rawValue().toString().toLatin1();
+                request.setRawHeader("User-Agent", QByteArrayLiteral("Qt Location based application"));
+                request.setRawHeader("User-Token", token);
+            }
+            return request;
+
+        case AirmapElevation:
+            request.setRawHeader("Referrer", "https://api.airmap.com/");
+            break;
+
         default:
             break;
     }
+    request.setRawHeader("User-Agent", _userAgent);
     return request;
 }
 
@@ -235,7 +276,12 @@ UrlFactory::_getURL(MapType type, int x, int y, int zoom, QNetworkAccessManager*
 #endif
     case StatkartTopo:
     {
-        return QString("http://opencache.statkart.no/gatekeeper/gk/gk.open_gmaps?layers=topo2&zoom=%1&x=%2&y=%3").arg(zoom).arg(x).arg(y);
+        return QString("http://opencache.statkart.no/gatekeeper/gk/gk.open_gmaps?layers=topo4&zoom=%1&x=%2&y=%3").arg(zoom).arg(x).arg(y);
+    }
+    break;
+    case EniroTopo:
+    {
+    	return QString("http://map.eniro.com/geowebcache/service/tms1.0.0/map/%1/%2/%3.png").arg(zoom).arg(x).arg((1<<zoom)-1-y);
     }
     break;
     /*
@@ -281,6 +327,7 @@ UrlFactory::_getURL(MapType type, int x, int y, int zoom, QNetworkAccessManager*
         QString key = _tileXYToQuadKey(x, y, zoom);
         return QString("http://ecn.t%1.tiles.virtualearth.net/tiles/h%2.jpeg?g=%3&mkt=%4").arg(_getServerNum(x, y, 4)).arg(key).arg(_versionBingMaps).arg(_language);
     }
+    /*
     case MapQuestMap:
     {
         char letter = "1234"[_getServerNum(x, y, 4)];
@@ -293,66 +340,73 @@ UrlFactory::_getURL(MapType type, int x, int y, int zoom, QNetworkAccessManager*
         return QString("http://otile%1.mqcdn.com/tiles/1.0.0/sat/%2/%3/%4.jpg").arg(letter).arg(zoom).arg(x).arg(y);
     }
     break;
+    */
+    case EsriWorldStreet:
+        return QString("http://services.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/%1/%2/%3").arg(zoom).arg(y).arg(x);
+    case EsriWorldSatellite:
+        return QString("http://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/%1/%2/%3").arg(zoom).arg(y).arg(x);
+    case EsriTerrain:
+        return QString("http://server.arcgisonline.com/ArcGIS/rest/services/World_Terrain_Base/MapServer/tile/%1/%2/%3").arg(zoom).arg(y).arg(x);
 
-    case MapBoxStreets:
-    case MapBoxLight:
-    case MapBoxDark:
-    case MapBoxSatellite:
-    case MapBoxHybrid:
-    case MapBoxWheatPaste:
-    case MapBoxStreetsBasic:
-    case MapBoxComic:
-    case MapBoxOutdoors:
-    case MapBoxRunBikeHike:
-    case MapBoxPencil:
-    case MapBoxPirates:
-    case MapBoxEmerald:
-    case MapBoxHighContrast:
+    case MapboxStreets:
+    case MapboxLight:
+    case MapboxDark:
+    case MapboxSatellite:
+    case MapboxHybrid:
+    case MapboxWheatPaste:
+    case MapboxStreetsBasic:
+    case MapboxComic:
+    case MapboxOutdoors:
+    case MapboxRunBikeHike:
+    case MapboxPencil:
+    case MapboxPirates:
+    case MapboxEmerald:
+    case MapboxHighContrast:
     {
-        QString mapBoxToken = getQGCMapEngine()->getMapBoxToken();
+        QString mapBoxToken = qgcApp()->toolbox()->settingsManager()->appSettings()->mapboxToken()->rawValue().toString();
         if(!mapBoxToken.isEmpty()) {
             QString server = "https://api.mapbox.com/v4/";
             switch(type) {
-                case MapBoxStreets:
+                case MapboxStreets:
                     server += "mapbox.streets";
                     break;
-                case MapBoxLight:
+                case MapboxLight:
                     server += "mapbox.light";
                     break;
-                case MapBoxDark:
+                case MapboxDark:
                     server += "mapbox.dark";
                     break;
-                case MapBoxSatellite:
+                case MapboxSatellite:
                     server += "mapbox.satellite";
                     break;
-                case MapBoxHybrid:
+                case MapboxHybrid:
                     server += "mapbox.streets-satellite";
                     break;
-                case MapBoxWheatPaste:
+                case MapboxWheatPaste:
                     server += "mapbox.wheatpaste";
                     break;
-                case MapBoxStreetsBasic:
+                case MapboxStreetsBasic:
                     server += "mapbox.streets-basic";
                     break;
-                case MapBoxComic:
+                case MapboxComic:
                     server += "mapbox.comic";
                     break;
-                case MapBoxOutdoors:
+                case MapboxOutdoors:
                     server += "mapbox.outdoors";
                     break;
-                case MapBoxRunBikeHike:
+                case MapboxRunBikeHike:
                     server += "mapbox.run-bike-hike";
                     break;
-                case MapBoxPencil:
+                case MapboxPencil:
                     server += "mapbox.pencil";
                     break;
-                case MapBoxPirates:
+                case MapboxPirates:
                     server += "mapbox.pirates";
                     break;
-                case MapBoxEmerald:
+                case MapboxEmerald:
                     server += "mapbox.emerald";
                     break;
-                case MapBoxHighContrast:
+                case MapboxHighContrast:
                     server += "mapbox.high-contrast";
                     break;
                 default:
@@ -363,7 +417,58 @@ UrlFactory::_getURL(MapType type, int x, int y, int zoom, QNetworkAccessManager*
         }
     }
     break;
+    case AirmapElevation:
+    {
+        return QString("https://api.airmap.com/elevation/v1/ele/carpet?points=%1,%2,%3,%4").arg(static_cast<double>(y)*QGCMapEngine::srtm1TileSize - 90.0).arg(
+                                                                                                static_cast<double>(x)*QGCMapEngine::srtm1TileSize - 180.0).arg(
+                                                                                                static_cast<double>(y + 1)*QGCMapEngine::srtm1TileSize - 90.0).arg(
+                                                                                                static_cast<double>(x + 1)*QGCMapEngine::srtm1TileSize - 180.0);
+    }
+    break;
 
+    case VWorldStreet :
+    {
+        int gap = zoom - 6;
+        int x_min = 53 * pow(2, gap);
+        int x_max = 55 * pow(2, gap) + (2*gap - 1);
+        int y_min = 22 * pow(2, gap);
+        int y_max = 26 * pow(2, gap) + (2*gap - 1);
+
+        if ( zoom > 19 ) {
+            return {};
+        }
+        else if ( zoom > 5 && x >= x_min && x <= x_max && y >= y_min && y <= y_max ) {
+            return QString("http://xdworld.vworld.kr:8080/2d/Base/service/%1/%2/%3.png").arg(zoom).arg(x).arg(y);
+        }
+        else {
+            QString key = _tileXYToQuadKey(x, y, zoom);
+            return QString("http://ecn.t%1.tiles.virtualearth.net/tiles/r%2.png?g=%3&mkt=%4").arg(_getServerNum(x, y, 4)).arg(key).arg(_versionBingMaps).arg(_language);
+        }
+
+
+    }
+        break;
+
+    case VWorldSatellite :
+    {
+        int gap = zoom - 6;
+        int x_min = 53 * pow(2, gap);
+        int x_max = 55 * pow(2, gap) + (2*gap - 1);
+        int y_min = 22 * pow(2, gap);
+        int y_max = 26 * pow(2, gap) + (2*gap - 1);
+
+        if ( zoom > 19 ) {
+            return {};
+        }
+        else if ( zoom > 5 && x >= x_min && x <= x_max && y >= y_min && y <= y_max ) {
+            return QString("http://xdworld.vworld.kr:8080/2d/Satellite/service/%1/%2/%3.jpeg").arg(zoom).arg(x).arg(y);
+        }
+        else {
+            QString key = _tileXYToQuadKey(x, y, zoom);
+            return QString("http://ecn.t%1.tiles.virtualearth.net/tiles/a%2.jpeg?g=%3&mkt=%4").arg(_getServerNum(x, y, 4)).arg(key).arg(_versionBingMaps).arg(_language);
+        }
+    }
+        break;
     default:
         qWarning("Unknown map id %d\n", type);
         break;
@@ -505,6 +610,7 @@ UrlFactory::_tryCorrectGoogleVersions(QNetworkAccessManager* networkManager)
 #define AVERAGE_MAPBOX_SAT_MAP      15739
 #define AVERAGE_MAPBOX_STREET_MAP   5648
 #define AVERAGE_TILE_SIZE           13652
+#define AVERAGE_AIRMAP_ELEV_SIZE    2786
 
 //-----------------------------------------------------------------------------
 quint32
@@ -517,30 +623,32 @@ UrlFactory::averageSizeForType(MapType type)
         return AVERAGE_BING_STREET_MAP;
     case GoogleSatellite:
         return AVERAGE_GOOGLE_SAT_MAP;
-    case MapBoxSatellite:
+    case MapboxSatellite:
         return AVERAGE_MAPBOX_SAT_MAP;
     case BingHybrid:
     case BingSatellite:
         return AVERAGE_BING_SAT_MAP;
     case GoogleTerrain:
         return AVERAGE_GOOGLE_TERRAIN_MAP;
-    case MapBoxStreets:
-    case MapBoxStreetsBasic:
-    case MapBoxRunBikeHike:
+    case MapboxStreets:
+    case MapboxStreetsBasic:
+    case MapboxRunBikeHike:
         return AVERAGE_MAPBOX_STREET_MAP;
+    case AirmapElevation:
+        return AVERAGE_AIRMAP_ELEV_SIZE;
     case GoogleLabels:
-    case MapBoxDark:
-    case MapBoxLight:
-    case MapBoxOutdoors:
-    case MapBoxPencil:
+    case MapboxDark:
+    case MapboxLight:
+    case MapboxOutdoors:
+    case MapboxPencil:
     case OpenStreetMap:
     case GoogleHybrid:
-    case MapBoxComic:
-    case MapBoxEmerald:
-    case MapBoxHighContrast:
-    case MapBoxHybrid:
-    case MapBoxPirates:
-    case MapBoxWheatPaste:
+    case MapboxComic:
+    case MapboxEmerald:
+    case MapboxHighContrast:
+    case MapboxHybrid:
+    case MapboxPirates:
+    case MapboxWheatPaste:
     default:
         break;
     }

@@ -126,7 +126,9 @@ QString QGCQFileDialog::getSaveFileName(
                             defaultSuffixCopy = _getFirstExtensionInFilter(filter);
                         }
                         //-- If this is set to strict, we have to have a default extension
-                        Q_ASSERT(defaultSuffixCopy.isEmpty() == false);
+                        if (defaultSuffixCopy.isEmpty()) {
+                            qWarning() << "Internal error";
+                        }
                         //-- Forcefully append our desired extension
                         result += ".";
                         result += defaultSuffixCopy;
@@ -157,7 +159,7 @@ QString QGCQFileDialog::getSaveFileName(
             }
             break;
         }
-        return QString("");
+        return {};
     }
 }
 
@@ -188,7 +190,7 @@ QString QGCQFileDialog::_getFirstExtensionInFilter(const QString& filter) {
             return match.captured(0).mid(2);
         }
     }
-    return QString("");
+    return {};
 }
 
 /// @brief Validates and updates the parameters for the file dialog calls
@@ -197,9 +199,13 @@ void QGCQFileDialog::_validate(Options& options)
     Q_UNUSED(options)
 
     // You can't use QGCQFileDialog if QGCApplication is not created yet.
-    Q_ASSERT(qgcApp());
+    if (!qgcApp()) {
+        qWarning() << "Internal error";
+        return;
+    }
     
-    Q_ASSERT_X(QThread::currentThread() == qgcApp()->thread(), "Threading issue", "QGCQFileDialog can only be called from main thread");
-    if (MainWindow::instance()) {
+    if (QThread::currentThread() != qgcApp()->thread()) {
+        qWarning() << "Threading issue: QGCQFileDialog can only be called from main thread";
+        return;
     }
 }

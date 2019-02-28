@@ -63,6 +63,7 @@ Item {
     }
 
     function showSettingsView() {
+        mainWindow.enableToolbar()
         rootLoader.sourceComponent = null
         if(currentPopUp) {
             currentPopUp.close()
@@ -78,6 +79,7 @@ Item {
     }
 
     function showSetupView() {
+        mainWindow.enableToolbar()
         rootLoader.sourceComponent = null
         if(currentPopUp) {
             currentPopUp.close()
@@ -93,6 +95,7 @@ Item {
     }
 
     function showPlanView() {
+        mainWindow.enableToolbar()
         rootLoader.sourceComponent = null
         if(currentPopUp) {
             currentPopUp.close()
@@ -107,6 +110,7 @@ Item {
     }
 
     function showFlyView() {
+        mainWindow.enableToolbar()
         rootLoader.sourceComponent = null
         if(currentPopUp) {
             currentPopUp.close()
@@ -118,6 +122,7 @@ Item {
     }
 
     function showAnalyzeView() {
+        mainWindow.enableToolbar()
         rootLoader.sourceComponent = null
         if(currentPopUp) {
             currentPopUp.close()
@@ -141,7 +146,11 @@ Item {
         // The above shutdown causes a flurry of activity as the vehicle components are removed. This in turn
         // causes the Windows Version of Qt to crash if you allow the close event to be accepted. In order to prevent
         // the crash, we ignore the close event and setup a delayed timer to close the window after things settle down.
-        delayedWindowCloseTimer.start()
+        if(ScreenTools.isWindows) {
+            delayedWindowCloseTimer.start()
+        } else {
+            mainWindow.reallyClose()
+        }
     }
 
     MessageDialog {
@@ -155,7 +164,7 @@ Item {
         onYes: activeConnectionsCloseDialog.check()
 
         function check() {
-            if (planViewLoader.item && planViewLoader.item.syncNeeded) {
+            if (planViewLoader.item && planViewLoader.item.dirty) {
                 unsavedMissionCloseDialog.open()
             } else {
                 activeConnectionsCloseDialog.check()
@@ -166,7 +175,7 @@ Item {
     MessageDialog {
         id:                 activeConnectionsCloseDialog
         title:              qsTr("%1 close").arg(QGroundControl.appName)
-        text:               qsTr("There are still active connections to vehicles. Do you want to disconnect these before closing?")
+        text:               qsTr("There are still active connections to vehicles. Are you sure you want to exit?")
         standardButtons:    StandardButton.Yes | StandardButton.Cancel
         modality:           Qt.ApplicationModal
         visible:            false
@@ -195,7 +204,7 @@ Item {
     property var messageQueue: []
 
     function showMessage(message) {
-        if(criticalMmessageArea.visible) {
+        if(criticalMmessageArea.visible || QGroundControl.videoManager.fullScreen) {
             messageQueue.push(message)
         } else {
             criticalMessageText.text = message
@@ -203,10 +212,10 @@ Item {
         }
     }
 
-    function formatMessage(message) {
-        message = message.replace(new RegExp("<#E>", "g"), "color: #f95e5e; font: " + (ScreenTools.defaultFontPointSize.toFixed(0) - 1) + "pt monospace;");
-        message = message.replace(new RegExp("<#I>", "g"), "color: #f9b55e; font: " + (ScreenTools.defaultFontPointSize.toFixed(0) - 1) + "pt monospace;");
-        message = message.replace(new RegExp("<#N>", "g"), "color: #ffffff; font: " + (ScreenTools.defaultFontPointSize.toFixed(0) - 1) + "pt monospace;");
+    function formatMessage(message) {        
+        message = message.replace(new RegExp("<#E>", "g"), "color: " + qgcPal.warningText + "; font: " + (ScreenTools.defaultFontPointSize.toFixed(0) - 1) + "pt monospace;");
+        message = message.replace(new RegExp("<#I>", "g"), "color: " + qgcPal.warningText + "; font: " + (ScreenTools.defaultFontPointSize.toFixed(0) - 1) + "pt monospace;");
+        message = message.replace(new RegExp("<#N>", "g"), "color: " + qgcPal.text + "; font: " + (ScreenTools.defaultFontPointSize.toFixed(0) - 1) + "pt monospace;");
         return message;
     }
 
@@ -219,6 +228,7 @@ Item {
     }
 
     function showMessageArea() {
+        mainWindow.enableToolbar()
         rootLoader.sourceComponent = null
         var currentlyVisible = messageArea.visible
         if(currentPopUp) {
@@ -240,14 +250,15 @@ Item {
     }
 
     function showPopUp(dropItem, centerX) {
+        mainWindow.enableToolbar()
         rootLoader.sourceComponent = null
         var oldIndicator = indicatorDropdown.sourceComponent
         if(currentPopUp) {
             currentPopUp.close()
         }
         if(oldIndicator !== dropItem) {
-            console.log(oldIndicator)
-            console.log(dropItem)
+            //console.log(oldIndicator)
+            //console.log(dropItem)
             indicatorDropdown.centerX = centerX
             indicatorDropdown.sourceComponent = dropItem
             indicatorDropdown.visible = true
@@ -260,6 +271,7 @@ Item {
     MainToolBar {
         id:                 toolBar
         height:             ScreenTools.toolbarHeight
+        visible:            !QGroundControl.videoManager.fullScreen
         anchors.left:       parent.left
         anchors.right:      parent.right
         anchors.top:        parent.top
@@ -273,16 +285,21 @@ Item {
         onShowFlyView:          mainWindow.showFlyView()
         onShowAnalyzeView:      mainWindow.showAnalyzeView()
         onArmVehicle:           flightView.guidedController.confirmAction(flightView.guidedController.actionArm)
-        onDisarmVehicle:        flightView.guidedController.confirmAction(flightView.guidedController.actionDisarm)
+        onDisarmVehicle: {
+            if (flightView.guidedController.showEmergenyStop) {
+                flightView.guidedController.confirmAction(flightView.guidedController.actionEmergencyStop)
+            } else {
+                flightView.guidedController.confirmAction(flightView.guidedController.actionDisarm)
+            }
+        }
+        onVtolTransitionToFwdFlight:    flightView.guidedController.confirmAction(flightView.guidedController.actionVtolTransitionToFwdFlight)
+        onVtolTransitionToMRFlight:     flightView.guidedController.confirmAction(flightView.guidedController.actionVtolTransitionToMRFlight)
 
         //-- Entire tool bar area disable on cammand
-        MouseArea {
+        DeadMouseArea {
             id:             toolbarBlocker
-            anchors.fill:   parent
             enabled:        false
-            onWheel:        { wheel.accepted = true; }
-            onPressed:      { mouse.accepted = true; }
-            onReleased:     { mouse.accepted = true; }
+            anchors.fill:   parent
         }
     }
 
@@ -339,6 +356,13 @@ Item {
         id:                 flightView
         anchors.fill:       parent
         visible:            true
+        //-------------------------------------------------------------------------
+        //-- Loader helper for any child, no matter how deep can display an element
+        //   on top of the video window.
+        Loader {
+            id:             rootVideoLoader
+            anchors.centerIn: parent
+        }
     }
 
     Loader {
@@ -376,22 +400,22 @@ Item {
     //-------------------------------------------------------------------------
     //-- System Message Area
     Rectangle {
-        id:                 messageArea
+        id:                         messageArea
+        width:                      mainWindow.width  * 0.5
+        height:                     mainWindow.height * 0.5
+        anchors.horizontalCenter:   parent.horizontalCenter
+        anchors.top:                parent.top
+        anchors.topMargin:          toolBar.height + ScreenTools.defaultFontPixelHeight
+        radius:                     ScreenTools.defaultFontPixelHeight * 0.5
+        color:                      qgcPal.window
+        border.color:               qgcPal.text
+        visible:                    false
+
         function close() {
             currentPopUp = null
             messageText.text    = ""
             messageArea.visible = false
         }
-        width:              mainWindow.width  * 0.5
-        height:             mainWindow.height * 0.5
-        color:              Qt.rgba(0,0,0,0.8)
-        visible:            false
-        radius:             ScreenTools.defaultFontPixelHeight * 0.5
-        border.color:       "#808080"
-        border.width:       2
-        anchors.horizontalCenter:   parent.horizontalCenter
-        anchors.top:                parent.top
-        anchors.topMargin:          toolBar.height + ScreenTools.defaultFontPixelHeight
         MouseArea {
             // This MouseArea prevents the Map below it from getting Mouse events. Without this
             // things like mousewheel will scroll the Flickable and then scroll the map as well.
@@ -411,11 +435,11 @@ Item {
                 id:             messageText
                 readOnly:       true
                 textFormat:     TextEdit.RichText
-                color:          "white"
+                color:          qgcPal.text
             }
         }
         //-- Dismiss System Message
-        Image {
+        QGCColoredImage {
             anchors.margins:    ScreenTools.defaultFontPixelHeight * 0.5
             anchors.top:        parent.top
             anchors.right:      parent.right
@@ -426,6 +450,7 @@ Item {
             fillMode:           Image.PreserveAspectFit
             mipmap:             true
             smooth:             true
+            color:              qgcPal.text
             MouseArea {
                 anchors.fill:       parent
                 anchors.margins:    ScreenTools.isMobile ? -ScreenTools.defaultFontPixelHeight : 0
@@ -435,7 +460,7 @@ Item {
             }
         }
         //-- Clear Messages
-        Image {
+        QGCColoredImage {
             anchors.bottom:     parent.bottom
             anchors.right:      parent.right
             anchors.margins:    ScreenTools.defaultFontPixelHeight * 0.5
@@ -446,6 +471,7 @@ Item {
             fillMode:           Image.PreserveAspectFit
             mipmap:             true
             smooth:             true
+            color:              qgcPal.text
             MouseArea {
                 anchors.fill:   parent
                 onClicked: {
@@ -569,7 +595,7 @@ Item {
     //-- Loader helper for any child, no matter how deep can display an element
     //   in the middle of the main window.
     Loader {
-        id: rootLoader
+        id:         rootLoader
         anchors.centerIn: parent
     }
 

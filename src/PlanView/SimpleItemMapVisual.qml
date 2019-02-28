@@ -21,7 +21,9 @@ import QGroundControl.FlightMap     1.0
 /// Simple Mission Item visuals
 Item {
     id: _root
-    property var map    ///< Map control to place item in
+
+    property var map        ///< Map control to place item in
+    property var qgcView    ///< QGCView to use for popping dialogs
 
     property var    _missionItem:       object
     property var    _itemVisual
@@ -90,6 +92,7 @@ Item {
         id: dragAreaComponent
 
         MissionItemIndicatorDrag {
+            mapControl:     _root.map
             itemIndicator:  _itemVisual
             itemCoordinate: _missionItem.coordinate
 
@@ -121,6 +124,7 @@ Item {
                         z:                      2
                         label:                  object.abbreviation.length === 0 ? object.sequenceNumber : object.abbreviation.charAt(0)
                         checked:                object.isCurrentItem
+                        child:                  true
                         specifiesCoordinate:    false
 
                         onClicked: _root.clicked(object.sequenceNumber)

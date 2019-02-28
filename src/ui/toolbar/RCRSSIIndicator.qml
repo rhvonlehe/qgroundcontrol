@@ -19,14 +19,15 @@ import QGroundControl.ScreenTools           1.0
 import QGroundControl.Palette               1.0
 
 //-------------------------------------------------------------------------
-//-- GPS Indicator
+//-- RC RSSI Indicator
 Item {
     width:          rssiRow.width * 1.1
     anchors.top:    parent.top
     anchors.bottom: parent.bottom
     visible:        _activeVehicle ? _activeVehicle.supportsRadio : true
 
-    property var _activeVehicle: QGroundControl.multiVehicleManager.activeVehicle
+    property var    _activeVehicle:     QGroundControl.multiVehicleManager.activeVehicle
+    property bool   _rcRSSIAvailable:   _activeVehicle ? _activeVehicle.rcRSSI > 0 && _activeVehicle.rcRSSI <= 100 : false
 
     Component {
         id: rcRSSIInfo
@@ -54,7 +55,7 @@ Item {
 
                 GridLayout {
                     id:                 rcrssiGrid
-                    visible:            _activeVehicle && _activeVehicle.rcRSSI != 255
+                    visible:            _rcRSSIAvailable
                     anchors.margins:    ScreenTools.defaultFontPixelHeight
                     columnSpacing:      ScreenTools.defaultFontPixelWidth
                     columns:            2
@@ -86,14 +87,14 @@ Item {
             sourceSize.height:  height
             source:             "/qmlimages/RC.svg"
             fillMode:           Image.PreserveAspectFit
-            opacity:            _activeVehicle ? (((_activeVehicle.rcRSSI < 0) || (_activeVehicle.rcRSSI > 100)) ? 0.5 : 1) : 0.5
+            opacity:            _rcRSSIAvailable ? 1 : 0.5
             color:              qgcPal.buttonText
         }
 
         SignalStrength {
             anchors.verticalCenter: parent.verticalCenter
             size:                   parent.height * 0.5
-            percent:                _activeVehicle ? ((_activeVehicle.rcRSSI > 100) ? 0 : _activeVehicle.rcRSSI) : 0
+            percent:                _rcRSSIAvailable ? _activeVehicle.rcRSSI : 0
         }
     }
 

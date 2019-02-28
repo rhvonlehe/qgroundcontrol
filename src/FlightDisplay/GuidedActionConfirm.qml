@@ -18,13 +18,12 @@ import QGroundControl.Palette       1.0
 /// Guided actions confirmation dialog
 Rectangle {
     id:             _root
-    border.color:   qgcPal.alertBorder
-    border.width:   1
     width:          confirmColumn.width  + (_margins * 4)
     height:         confirmColumn.height + (_margins * 4)
     radius:         ScreenTools.defaultFontPixelHeight / 2
-    color:          qgcPal.alertBackground
-    opacity:        0.9
+    color:          qgcPal.window
+    border.color:   _emergencyAction ? "red" : qgcPal.windowShade
+    border.width:   _emergencyAction ? 4 : 1
     z:              guidedController.z
     visible:        false
 
@@ -35,18 +34,50 @@ Rectangle {
     property int    action
     property var    actionData
     property bool   hideTrigger:        false
+    property var    mapIndicator
 
-    property real _margins: ScreenTools.defaultFontPixelWidth
+    property real _margins:         ScreenTools.defaultFontPixelWidth
+    property bool _emergencyAction: action === guidedController.actionEmergencyStop
 
     onHideTriggerChanged: {
         if (hideTrigger) {
-            hideTrigger = false
-            altitudeSlider.visible = false
-            visible = false
+            confirmCancelled()
         }
     }
 
+    function show(immediate) {
+        if (immediate) {
+            visible = true
+        } else {
+            // We delay showing the confirmation for a small amount in order to any other state
+            // changes to propogate through the system. This way only the final state shows up.
+            visibleTimer.restart()
+        }
+    }
+
+    function confirmCancelled() {
+        altitudeSlider.visible = false
+        visible = false
+        hideTrigger = false
+        visibleTimer.stop()
+        if (mapIndicator) {
+            mapIndicator.actionCancelled()
+            mapIndicator = undefined
+        }
+    }
+
+    Timer {
+        id:             visibleTimer
+        interval:       1000
+        repeat:         false
+        onTriggered:    visible = true
+    }
+
     QGCPalette { id: qgcPal }
+
+    DeadMouseArea {
+        anchors.fill: parent
+    }
 
     Column {
         id:                 confirmColumn
@@ -56,7 +87,6 @@ Rectangle {
 
         QGCLabel {
             id:                     titleText
-            color:                  qgcPal.alertText
             anchors.left:           slider.left
             anchors.right:          slider.right
             horizontalAlignment:    Text.AlignHCenter
@@ -65,7 +95,6 @@ Rectangle {
 
         QGCLabel {
             id:                     messageText
-            color:                  qgcPal.alertText
             anchors.left:           slider.left
             anchors.right:          slider.right
             horizontalAlignment:    Text.AlignHCenter
@@ -80,18 +109,17 @@ Rectangle {
 
             onAccept: {
                 _root.visible = false
+                var altitudeChange = 0
                 if (altitudeSlider.visible) {
-                    _root.actionData = altitudeSlider.getValue()
+                    altitudeChange = altitudeSlider.getAltitudeChangeValue()
                     altitudeSlider.visible = false
                 }
                 hideTrigger = false
-                guidedController.executeAction(_root.action, _root.actionData)
-            }
-
-            onReject: {
-                altitudeSlider.visible = false
-                _root.visible = false
-                hideTrigger = false
+                guidedController.executeAction(_root.action, _root.actionData, altitudeChange)
+                if (mapIndicator) {
+                    mapIndicator.actionConfirmed()
+                    mapIndicator = undefined
+                }
             }
         }
     }
@@ -105,13 +133,11 @@ Rectangle {
         sourceSize.height:  width
         source:             "/res/XDelete.svg"
         fillMode:           Image.PreserveAspectFit
-        color:              qgcPal.alertText
+        color:              qgcPal.text
+
         QGCMouseArea {
             fillItem:   parent
-            onClicked: {
-                altitudeSlider.visible = false
-                _root.visible = false
-            }
+            onClicked:  confirmCancelled()
         }
     }
 }

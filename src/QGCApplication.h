@@ -30,9 +30,10 @@
 #include "FirmwarePluginManager.h"
 #include "MultiVehicleManager.h"
 #include "JoystickManager.h"
-#include "GAudioOutput.h"
+#include "AudioOutput.h"
 #include "UASMessageHandler.h"
 #include "FactSystem.h"
+#include "GPSRTKFactGroup.h"
 
 #ifdef QGC_RTLAB_ENABLED
 #include "OpalLink.h"
@@ -42,6 +43,7 @@
 class QGCSingleton;
 class MainWindow;
 class QGCToolbox;
+class QGCFileDownload;
 
 /**
  * @brief The main application and management class.
@@ -69,8 +71,11 @@ public:
     /// @brief Clears the persistent flag to delete all settings the next time QGroundControl is started.
     void clearDeleteAllSettingsNextBoot(void);
 
-    /// @brief Returns truee if unit test are being run
+    /// @brief Returns true if unit tests are being run
     bool runningUnitTests(void) { return _runningUnitTests; }
+
+    /// @brief Returns true if Qt debug output should be logged to a file
+    bool logOutput(void) { return _logOutput; }
 
     /// Used to report a missing Parameter. Warning will be displayed to user. Method may be called
     /// multiple times.
@@ -82,15 +87,19 @@ public:
     /// @return true: Fake ui into showing mobile interface
     bool fakeMobile(void) { return _fakeMobile; }
 
-#ifdef QT_DEBUG
-    bool testHighDPI(void) { return _testHighDPI; }
-#endif
-
     // Still working on getting rid of this and using dependency injection instead for everything
     QGCToolbox* toolbox(void) { return _toolbox; }
 
     /// Do we have Bluetooth Support?
     bool isBluetoothAvailable() { return _bluetoothAvailable; }
+
+    /// Is Internet available?
+    bool isInternetAvailable();
+
+    FactGroup* gpsRtkFactGroup(void)  { return _gpsRtkFactGroup; }
+
+    static QString cachedParameterMetaDataFile(void);
+    static QString cachedAirframeMetaDataFile(void);
 
 public slots:
     /// You can connect to this slot to show an information message box from a different thread.
@@ -106,13 +115,11 @@ public slots:
 
     void qmlAttemptWindowClose(void);
 
-#ifndef __mobile__
     /// Save the specified telemetry Log
     void saveTelemetryLogOnMainThread(QString tempLogfile);
 
     /// Check that the telemetry save path is set correctly
     void checkTelemetrySavePathOnMainThread(void);
-#endif
 
 signals:
     /// This is connected to MAVLinkProtocol::checkForLostLogFiles. We signal this to ourselves to call the slot
@@ -126,11 +133,11 @@ public:
     ///         Although public should only be called by main.
     void _initCommon(void);
 
-    /// @brief Intialize the application for normal application boot. Or in other words we are not going to run
+    /// @brief Initialize the application for normal application boot. Or in other words we are not going to run
     ///         unit tests. Although public should only be called by main.
     bool _initForNormalAppBoot(void);
 
-    /// @brief Intialize the application for normal application boot. Or in other words we are not going to run
+    /// @brief Initialize the application for normal application boot. Or in other words we are not going to run
     ///         unit tests. Although public should only be called by main.
     bool _initForUnitTests(void);
 
@@ -148,15 +155,24 @@ public:
 
 private slots:
     void _missingParamsDisplay(void);
+    void _currentVersionDownloadFinished(QString remoteFile, QString localFile);
+    void _currentVersionDownloadError(QString errorMsg);
+    bool _parseVersionText(const QString& versionString, int& majorVersion, int& minorVersion, int& buildVersion);
+    void _onGPSConnect();
+    void _onGPSDisconnect();
+    void _gpsSurveyInStatus(float duration, float accuracyMM,  double latitude, double longitude, float altitude, bool valid, bool active);
+    void _gpsNumSatellites(int numSatellites);
 
 private:
     QObject* _rootQmlObject(void);
+    void _checkForNewVersion(void);
 
 #ifdef __mobile__
     QQmlApplicationEngine* _qmlAppEngine;
 #endif
 
     bool _runningUnitTests; ///< true: running unit tests, false: normal app
+    bool _logOutput;        ///< true: Log Qt debug output to file
 
     static const char*  _darkStyleFile;
     static const char*  _lightStyleFile;
@@ -165,12 +181,15 @@ private:
     QStringList         _missingParams;                                     ///< List of missing facts to be displayed
     bool				_fakeMobile;                                        ///< true: Fake ui into displaying mobile interface
     bool                _settingsUpgraded;                                  ///< true: Settings format has been upgrade to new version
-
-#ifdef QT_DEBUG
-    bool _testHighDPI;  ///< true: double fonts sizes for simulating high dpi devices
-#endif
+    int                 _majorVersion;
+    int                 _minorVersion;
+    int                 _buildVersion;
+    QGCFileDownload*    _currentVersionDownload;
+    GPSRTKFactGroup*    _gpsRtkFactGroup;
 
     QGCToolbox* _toolbox;
+
+    QTranslator _QGCTranslator;
 
     bool _bluetoothAvailable;
 

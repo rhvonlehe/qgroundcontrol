@@ -41,6 +41,8 @@ APMCopterMode::APMCopterMode(uint32_t mode, bool settable) :
     enumToString.insert(THROW,     "Throw");
     enumToString.insert(AVOID_ADSB,"Avoid ADSB");
     enumToString.insert(GUIDED_NOGPS,"Guided No GPS");
+    enumToString.insert(SAFE_RTL,"Smart RTL");
+
 
     setEnumToStringMapping(enumToString);
 }
@@ -66,6 +68,8 @@ ArduCopterFirmwarePlugin::ArduCopterFirmwarePlugin(void)
     supportedFlightModes << APMCopterMode(APMCopterMode::THROW     ,true);
     supportedFlightModes << APMCopterMode(APMCopterMode::AVOID_ADSB,true);
     supportedFlightModes << APMCopterMode(APMCopterMode::GUIDED_NOGPS,true);
+    supportedFlightModes << APMCopterMode(APMCopterMode::SAFE_RTL,true);
+
 
 
     setSupportedModes(supportedFlightModes);
@@ -108,114 +112,70 @@ ArduCopterFirmwarePlugin::ArduCopterFirmwarePlugin(void)
         remapV3_5["SERVO13_FUNCTION"] = QStringLiteral("RC13_FUNCTION");
         remapV3_5["SERVO14_FUNCTION"] = QStringLiteral("RC14_FUNCTION");
 
+        remapV3_5["SERVO5_MIN"] = QStringLiteral("RC5_MIN");
+        remapV3_5["SERVO6_MIN"] = QStringLiteral("RC6_MIN");
+        remapV3_5["SERVO7_MIN"] = QStringLiteral("RC7_MIN");
+        remapV3_5["SERVO8_MIN"] = QStringLiteral("RC8_MIN");
+        remapV3_5["SERVO9_MIN"] = QStringLiteral("RC9_MIN");
+        remapV3_5["SERVO10_MIN"] = QStringLiteral("RC10_MIN");
+        remapV3_5["SERVO11_MIN"] = QStringLiteral("RC11_MIN");
+        remapV3_5["SERVO12_MIN"] = QStringLiteral("RC12_MIN");
+        remapV3_5["SERVO13_MIN"] = QStringLiteral("RC13_MIN");
+        remapV3_5["SERVO14_MIN"] = QStringLiteral("RC14_MIN");
+
+        remapV3_5["SERVO5_MAX"] = QStringLiteral("RC5_MAX");
+        remapV3_5["SERVO6_MAX"] = QStringLiteral("RC6_MAX");
+        remapV3_5["SERVO7_MAX"] = QStringLiteral("RC7_MAX");
+        remapV3_5["SERVO8_MAX"] = QStringLiteral("RC8_MAX");
+        remapV3_5["SERVO9_MAX"] = QStringLiteral("RC9_MAX");
+        remapV3_5["SERVO10_MAX"] = QStringLiteral("RC10_MAX");
+        remapV3_5["SERVO11_MAX"] = QStringLiteral("RC11_MAX");
+        remapV3_5["SERVO12_MAX"] = QStringLiteral("RC12_MAX");
+        remapV3_5["SERVO13_MAX"] = QStringLiteral("RC13_MAX");
+        remapV3_5["SERVO14_MAX"] = QStringLiteral("RC14_MAX");
+
+        remapV3_5["SERVO5_REVERSED"] = QStringLiteral("RC5_REVERSED");
+        remapV3_5["SERVO6_REVERSED"] = QStringLiteral("RC6_REVERSED");
+        remapV3_5["SERVO7_REVERSED"] = QStringLiteral("RC7_REVERSED");
+        remapV3_5["SERVO8_REVERSED"] = QStringLiteral("RC8_REVERSED");
+        remapV3_5["SERVO9_REVERSED"] = QStringLiteral("RC9_REVERSED");
+        remapV3_5["SERVO10_REVERSED"] = QStringLiteral("RC10_REVERSED");
+        remapV3_5["SERVO11_REVERSED"] = QStringLiteral("RC11_REVERSED");
+        remapV3_5["SERVO12_REVERSED"] = QStringLiteral("RC12_REVERSED");
+        remapV3_5["SERVO13_REVERSED"] = QStringLiteral("RC13_REVERSED");
+        remapV3_5["SERVO14_REVERSED"] = QStringLiteral("RC14_REVERSED");
+
+        remapV3_5["ARMING_VOLT_MIN"] = QStringLiteral("ARMING_MIN_VOLT");
+        remapV3_5["ARMING_VOLT2_MIN"] = QStringLiteral("ARMING_MIN_VOLT2");
+
+        FirmwarePlugin::remapParamNameMap_t& remapV3_6 = _remapParamName[3][6];
+
+        remapV3_6["BATT_AMP_PERVLT"] =  QStringLiteral("BATT_AMP_PERVOL");
+        remapV3_6["BATT2_AMP_PERVLT"] = QStringLiteral("BATT2_AMP_PERVOL");
+        remapV3_6["BATT_LOW_MAH"] =     QStringLiteral("FS_BATT_MAH");
+        remapV3_6["BATT_LOW_VOLT"] =    QStringLiteral("FS_BATT_VOLTAGE");
+        remapV3_6["BATT_FS_LOW_ACT"] =  QStringLiteral("FS_BATT_ENABLE");
+        remapV3_6["PSC_ACCZ_P"] =       QStringLiteral("ACCEL_Z_P");
+        remapV3_6["PSC_ACCZ_I"] =       QStringLiteral("ACCEL_Z_I");
+
+        FirmwarePlugin::remapParamNameMap_t& remapV3_7 = _remapParamName[3][7];
+
+        remapV3_7["BATT_ARM_VOLT"] =    QStringLiteral("ARMING_VOLT_MIN");
+        remapV3_7["BATT2_ARM_VOLT"] =   QStringLiteral("ARMING_VOLT2_MIN");
+
         _remapParamNameIntialized = true;
     }
 }
 
 int ArduCopterFirmwarePlugin::remapParamNameHigestMinorVersionNumber(int majorVersionNumber) const
 {
-    // Remapping supports up to 3.5
-    return majorVersionNumber == 3 ? 5 : Vehicle::versionNotSetValue;
-}
-
-bool ArduCopterFirmwarePlugin::isCapable(const Vehicle* vehicle, FirmwareCapabilities capabilities)
-{
-    Q_UNUSED(vehicle);
-
-    uint32_t vehicleCapabilities = SetFlightModeCapability | GuidedModeCapability | PauseVehicleCapability;
-
-    return (capabilities & vehicleCapabilities) == capabilities;
-}
-
-void ArduCopterFirmwarePlugin::guidedModeRTL(Vehicle* vehicle)
-{
-    vehicle->setFlightMode("RTL");
+    // Remapping supports up to 3.7
+    return majorVersionNumber == 3 ? 7 : Vehicle::versionNotSetValue;
 }
 
 void ArduCopterFirmwarePlugin::guidedModeLand(Vehicle* vehicle)
 {
-    vehicle->setFlightMode("Land");
-}
-
-void ArduCopterFirmwarePlugin::guidedModeTakeoff(Vehicle* vehicle)
-{
-    if (!_armVehicle(vehicle)) {
-        qgcApp()->showMessage(tr("Unable to takeoff: Vehicle failed to arm."));
-        return;
-    }
-
-    vehicle->sendMavCommand(vehicle->defaultComponentId(),
-                            MAV_CMD_NAV_TAKEOFF,
-                            true, // show error
-                            0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-                            2.5);
-}
-
-void ArduCopterFirmwarePlugin::guidedModeGotoLocation(Vehicle* vehicle, const QGeoCoordinate& gotoCoord)
-{
-    if (qIsNaN(vehicle->altitudeRelative()->rawValue().toDouble())) {
-        qgcApp()->showMessage(QStringLiteral("Unable to go to location, vehicle position not known."));
-        return;
-    }
-
-    QGeoCoordinate coordWithAltitude = gotoCoord;
-    coordWithAltitude.setAltitude(vehicle->altitudeRelative()->rawValue().toDouble());
-    vehicle->missionManager()->writeArduPilotGuidedMissionItem(coordWithAltitude, false /* altChangeOnly */);
-}
-
-void ArduCopterFirmwarePlugin::guidedModeChangeAltitude(Vehicle* vehicle, double altitudeChange)
-{
-    if (qIsNaN(vehicle->altitudeRelative()->rawValue().toDouble())) {
-        qgcApp()->showMessage(QStringLiteral("Unable to change altitude, vehicle altitude not known."));
-        return;
-    }
-
-    // Don't allow altitude to fall below 3 meters above home
-    double currentAltRel = vehicle->altitudeRelative()->rawValue().toDouble();
-    if (altitudeChange <= 0 && currentAltRel <= 3) {
-        return;
-    }
-    if (currentAltRel + altitudeChange < 3) {
-        altitudeChange = 3 - currentAltRel;
-    }
-
-    setGuidedMode(vehicle, true);
-
-    mavlink_message_t msg;
-    mavlink_set_position_target_local_ned_t cmd;
-
-    memset(&cmd, 0, sizeof(cmd));
-
-    cmd.target_system = vehicle->id();
-    cmd.target_component = vehicle->defaultComponentId();
-    cmd.coordinate_frame = MAV_FRAME_LOCAL_OFFSET_NED;
-    cmd.type_mask = 0xFFF8; // Only x/y/z valid
-    cmd.x = 0.0f;
-    cmd.y = 0.0f;
-    cmd.z = -(altitudeChange);
-
-    MAVLinkProtocol* mavlink = qgcApp()->toolbox()->mavlinkProtocol();
-    mavlink_msg_set_position_target_local_ned_encode_chan(mavlink->getSystemId(),
-                                                          mavlink->getComponentId(),
-                                                          vehicle->priorityLink()->mavlinkChannel(),
-                                                          &msg,
-                                                          &cmd);
-
-    vehicle->sendMessageOnLink(vehicle->priorityLink(), msg);
-}
-
-void ArduCopterFirmwarePlugin::pauseVehicle(Vehicle* vehicle)
-{
-    vehicle->setFlightMode("Brake");
-}
-
-void ArduCopterFirmwarePlugin::setGuidedMode(Vehicle* vehicle, bool guidedMode)
-{
-    if (guidedMode) {
-        vehicle->setFlightMode("Guided");
-    } else {
-        pauseVehicle(vehicle);
-    }
+    _setFlightModeAndValidate(vehicle, "Land");
 }
 
 bool ArduCopterFirmwarePlugin::multiRotorCoaxialMotors(Vehicle* vehicle)
@@ -229,31 +189,16 @@ bool ArduCopterFirmwarePlugin::multiRotorXConfig(Vehicle* vehicle)
     return vehicle->parameterManager()->getParameter(FactSystem::defaultComponentId, "FRAME")->rawValue().toInt() != 0;
 }
 
-QString ArduCopterFirmwarePlugin::geoFenceRadiusParam(Vehicle* vehicle)
-{
-    Q_UNUSED(vehicle);
-    return QStringLiteral("FENCE_RADIUS");
-}
-
 bool ArduCopterFirmwarePlugin::vehicleYawsToNextWaypointInMission(const Vehicle* vehicle) const
 {
-    if (!vehicle->isOfflineEditingVehicle() && vehicle->parameterManager()->parameterExists(FactSystem::defaultComponentId, QStringLiteral("WP_YAW_BEHAVIOR"))) {
-        Fact* yawMode = vehicle->parameterManager()->getParameter(FactSystem::defaultComponentId, QStringLiteral("WP_YAW_BEHAVIOR"));
-        return yawMode && yawMode->rawValue().toInt() != 0;
+    if (vehicle->isOfflineEditingVehicle()) {
+        return FirmwarePlugin::vehicleYawsToNextWaypointInMission(vehicle);
+    } else {
+        if (vehicle->multiRotor() && vehicle->parameterManager()->parameterExists(FactSystem::defaultComponentId, QStringLiteral("WP_YAW_BEHAVIOR"))) {
+            Fact* yawMode = vehicle->parameterManager()->getParameter(FactSystem::defaultComponentId, QStringLiteral("WP_YAW_BEHAVIOR"));
+            return yawMode && yawMode->rawValue().toInt() != 0;
+        }
     }
     return true;
 }
 
-void ArduCopterFirmwarePlugin::missionFlightSpeedInfo(Vehicle* vehicle, double& hoverSpeed, double& cruiseSpeed)
-{
-    QString hoverSpeedParam("WPNAV_SPEED");
-
-    // First pull settings defaults
-    FirmwarePlugin::missionFlightSpeedInfo(vehicle, hoverSpeed, cruiseSpeed);
-
-    cruiseSpeed = 0;
-    if (vehicle->parameterManager()->parameterExists(FactSystem::defaultComponentId, hoverSpeedParam)) {
-        Fact* speed = vehicle->parameterManager()->getParameter(FactSystem::defaultComponentId, hoverSpeedParam);
-        hoverSpeed = speed->rawValue().toDouble() / 100; // cm/s -> m/s
-    }
-}

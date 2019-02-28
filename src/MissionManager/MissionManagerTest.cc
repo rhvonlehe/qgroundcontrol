@@ -37,7 +37,9 @@ void MissionManagerTest::_writeItems(MockLinkMissionItemHandler::FailureMode_t f
     // Editor has a home position item on the front, so we do the same
     MissionItem* homeItem = new MissionItem(NULL /* Vehicle */, this);
     homeItem->setCommand(MAV_CMD_NAV_WAYPOINT);
-    homeItem->setCoordinate(QGeoCoordinate(47.3769, 8.549444, 0));
+    homeItem->setParam5(47.3769);
+    homeItem->setParam6(8.549444);
+    homeItem->setParam7(0);
     homeItem->setSequenceNumber(0);
     missionItems.append(homeItem);
 
@@ -60,9 +62,8 @@ void MissionManagerTest::_writeItems(MockLinkMissionItemHandler::FailureMode_t f
     
     // writeMissionItems should emit these signals before returning:
     //      inProgressChanged
-    //      newMissionItemsAvailable
     QVERIFY(_missionManager->inProgress());
-    QCOMPARE(_multiSpyMissionManager->checkSignalByMask(inProgressChangedSignalMask | newMissionItemsAvailableSignalMask), true);
+    QCOMPARE(_multiSpyMissionManager->checkSignalByMask(inProgressChangedSignalMask), true);
     _checkInProgressValues(true);
     
     _multiSpyMissionManager->clearAllSignals();
@@ -93,8 +94,9 @@ void MissionManagerTest::_writeItems(MockLinkMissionItemHandler::FailureMode_t f
 
         // Wait for write sequence to complete. We should get:
         //      inProgressChanged(false) signal
-        _multiSpyMissionManager->waitForSignalByIndex(inProgressChangedSignalIndex, _missionManagerSignalWaitTime);
-        QCOMPARE(_multiSpyMissionManager->checkOnlySignalByMask(inProgressChangedSignalMask), true);
+        //      sednComplete signal
+        _multiSpyMissionManager->waitForSignalByIndex(sendCompleteSignalIndex, _missionManagerSignalWaitTime);
+        QCOMPARE(_multiSpyMissionManager->checkSignalByMask(inProgressChangedSignalMask | sendCompleteSignalMask), true);
 
         // Validate inProgressChanged signal value
         _checkInProgressValues(false);
@@ -120,7 +122,7 @@ void MissionManagerTest::_roundTripItems(MockLinkMissionItemHandler::FailureMode
     _mockLink->setMissionItemFailureMode(failureMode);
 
     // Read the items back from the vehicle
-    _missionManager->requestMissionItems();
+    _missionManager->loadFromVehicle();
     
     // requestMissionItems should emit inProgressChanged signal before returning so no need to wait for it
     QVERIFY(_missionManager->inProgress());

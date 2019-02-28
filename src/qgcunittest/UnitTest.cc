@@ -81,7 +81,7 @@ int UnitTest::run(QString& singleTest)
 {
     int ret = 0;
     
-    foreach (QObject* test, _testList()) {
+    for (QObject* test: _testList()) {
         if (singleTest.isEmpty() || singleTest == test->objectName()) {
             QStringList args;
             args << "*" << "-maxwarnings" << "0";
@@ -391,6 +391,12 @@ void UnitTest::_connectMockLink(MAV_AUTOPILOT autopilot)
     QVERIFY(qgcApp()->toolbox()->multiVehicleManager()->parameterReadyVehicleAvailable());
     _vehicle = qgcApp()->toolbox()->multiVehicleManager()->activeVehicle();
     QVERIFY(_vehicle);
+
+    // Wait for plan request to complete
+    if (!_vehicle->initialPlanRequestComplete()) {
+        QSignalSpy spyPlan(_vehicle, SIGNAL(initialPlanRequestCompleteChanged(bool)));
+        QCOMPARE(spyPlan.wait(10000), true);
+    }
 }
 
 void UnitTest::_disconnectMockLink(void)
@@ -503,4 +509,49 @@ bool UnitTest::fileCompare(const QString& file1, const QString& file2)
     }
 
     return true;
+}
+
+bool UnitTest::doubleNaNCompare(double value1, double value2)
+{
+    if (qIsNaN(value1) && qIsNaN(value2)) {
+        return true;
+    } else {
+        bool ret = qFuzzyCompare(value1, value2);
+        if (!ret) {
+            qDebug() << value1 << value2;
+        }
+        return ret;
+    }
+}
+
+void UnitTest::changeFactValue(Fact* fact,double increment)
+{
+    if (fact->typeIsBool()) {
+        fact->setRawValue(!fact->rawValue().toBool());
+    } else {
+        if (increment == 0) {
+            increment = 1;
+        }
+        fact->setRawValue(fact->rawValue().toDouble() + increment);
+    }
+}
+
+void UnitTest::_missionItemsEqual(MissionItem& actual, MissionItem& expected)
+{
+    QCOMPARE(static_cast<int>(actual.command()),    static_cast<int>(expected.command()));
+    QCOMPARE(static_cast<int>(actual.frame()),      static_cast<int>(expected.frame()));
+    QCOMPARE(actual.autoContinue(),                 expected.autoContinue());
+
+    QVERIFY(UnitTest::doubleNaNCompare(actual.param1(), expected.param1()));
+    QVERIFY(UnitTest::doubleNaNCompare(actual.param2(), expected.param2()));
+    QVERIFY(UnitTest::doubleNaNCompare(actual.param3(), expected.param3()));
+    QVERIFY(UnitTest::doubleNaNCompare(actual.param4(), expected.param4()));
+    QVERIFY(UnitTest::doubleNaNCompare(actual.param5(), expected.param5()));
+    QVERIFY(UnitTest::doubleNaNCompare(actual.param6(), expected.param6()));
+    QVERIFY(UnitTest::doubleNaNCompare(actual.param7(), expected.param7()));
+}
+
+bool UnitTest::fuzzyCompareLatLon(const QGeoCoordinate& coord1, const QGeoCoordinate& coord2)
+{
+    return coord1.distanceTo(coord2) < 1.0;
 }

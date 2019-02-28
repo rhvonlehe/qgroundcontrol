@@ -9,6 +9,7 @@ Button {
     id: combo
 
     property real   pointSize:      ScreenTools.defaultFontPointSize    ///< Point size for button text
+    property bool   centeredLabel:  false
     property alias  model:          popupItems.model
     property alias  textRole:       popup.textRole
     property alias  currentIndex:   popup.__selectedIndex
@@ -16,10 +17,13 @@ Button {
     readonly property alias count:          popupItems.count
     readonly property alias currentText:    popup.currentText
 
-    property var    _qgcPal:                QGCPalette { colorGroupEnabled: enabled }
-    property int    _horizontalPadding:    ScreenTools.defaultFontPixelWidth
-    property int    _verticalPadding:      Math.round(ScreenTools.defaultFontPixelHeight / 2)
-    property var    __popup:               popup
+    property bool   _showBorder:        _qgcPal.globalTheme === QGCPalette.Light
+    property var    _qgcPal:            QGCPalette { colorGroupEnabled: enabled }
+    property int    _horizontalPadding: ScreenTools.defaultFontPixelWidth
+    property int    _verticalPadding:   Math.round(ScreenTools.defaultFontPixelHeight / 2)
+    property real   _dropImageWidth:    ScreenTools.defaultFontPixelHeight / 2
+    property real   _dropImageMargin:   _dropImageWidth / 2
+    property var    __popup:            popup
 
     signal activated(int index)
 
@@ -36,34 +40,35 @@ Button {
         background: Rectangle {
             implicitWidth:  ScreenTools.implicitComboBoxWidth
             implicitHeight: ScreenTools.implicitComboBoxHeight
-            color:          control._qgcPal.button
+            color:          control._qgcPal.textField
+            border.width:   enabled ? 1 : 0
+            border.color:   "#999"
 
             QGCColoredImage {
                 id:                     image
-                width:                  ScreenTools.defaultFontPixelHeight / 2
-                height:                 width
+                width:                  _dropImageWidth
+                height:                 _dropImageWidth
                 anchors.verticalCenter: parent.verticalCenter
-                anchors.rightMargin:    width / 2
+                anchors.rightMargin:    _dropImageMargin
                 anchors.right:          parent.right
                 source:                 "/qmlimages/arrow-down.png"
-                color:                  control._qgcPal.buttonText
+                color:                  control._qgcPal.textFieldText
             }
         }
 
         /*! This defines the label of the button.  */
         label: Item {
-            implicitWidth:  text.implicitWidth
+            implicitWidth:  text.implicitWidth + _dropImageWidth
             implicitHeight: text.implicitHeight
             baselineOffset: text.y + text.baselineOffset
 
-            Text {
-                id:                     text
-                anchors.verticalCenter: parent.verticalCenter
-                antialiasing:           true
-                text:                   control.currentText
-                font.pointSize:         pointSize
-                font.family:            ScreenTools.normalFontFamily
-                color:                  control._qgcPal.buttonText
+            QGCLabel {
+                id:                         text
+                anchors.verticalCenter:     parent.verticalCenter
+                anchors.horizontalCenter:   centeredLabel ? parent.horizontalCenter : undefined
+                text:                       control.currentText
+                color:                      control._qgcPal.textFieldText
+                font.pointSize:             pointSize
             }
         }
     }
@@ -96,15 +101,23 @@ Button {
         return -1
     }
 
+    ExclusiveGroup { id: eg }
+
     Menu {
         id:             popup
         __minimumWidth: combo.width
         __visualItem:   combo
 
         style: MenuStyle {
-            font:               combo.font
-            __menuItemType:     "comboboxitem"
-            __scrollerStyle:    ScrollViewStyle { }
+            font.pointSize:             ScreenTools.defaultFontPointSize
+            font.family:                ScreenTools.normalFontFamily
+            __labelColor:               combo._qgcPal.buttonText
+            __selectedLabelColor:       combo._qgcPal.buttonHighlightText
+            __selectedBackgroundColor:  combo._qgcPal.buttonHighlight
+            __backgroundColor:          combo._qgcPal.button
+            __maxPopupHeight:           600
+            __menuItemType:             "comboboxitem"
+            __scrollerStyle:            ScrollViewStyle { }
         }
 
         property string textRole: ""
@@ -184,22 +197,6 @@ Button {
             }
         }
 
-        Component {
-            id: menuItemComponent
-
-            MenuItem {
-                property int index
-
-                onTriggered: {
-                    //console.log("onTriggered", index, currentIndex)
-                    if (index !== currentIndex) {
-                        //console.log("activated", index)
-                        activated(index)
-                    }
-                }
-            }
-        }
-
         Instantiator {
             id: popupItems
 
@@ -210,7 +207,7 @@ Button {
 
             onObjectAdded: {
                 // There is a bug in Instantiator which can cause objects to be added out of order from an index standpoint.
-                // If not handled correcty this will cause menu items to be added incorrectly due to the way Menu.insertItem works.
+                // If not handled correctly this will cause menu items to be added incorrectly due to the way Menu.insertItem works.
                 //console.log("menu add", index, object.text)
                 if (index === popup.__selectedIndex) {
                     popup.selectedText = object["text"]
@@ -236,7 +233,10 @@ Button {
             onObjectRemoved: popup.removeItem(object)
 
             MenuItem {
-                text: popup.textRole === '' ? modelData : ((popup._modelIsArray ? modelData[popup.textRole] : model[popup.textRole]) || '')
+                text:           popup.textRole === '' ? modelData : ((popup._modelIsArray ? modelData[popup.textRole] : model[popup.textRole]) || '')
+                checked:        index == currentIndex
+                checkable:      true
+                exclusiveGroup: eg
 
                 property int itemIndex: index
 

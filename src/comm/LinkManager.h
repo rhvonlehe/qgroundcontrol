@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ *   (c) 2009-2018 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -11,8 +11,7 @@
 /// @file
 ///     @author Lorenz Meier <mavteam@student.ethz.ch>
 
-#ifndef _LINKMANAGER_H_
-#define _LINKMANAGER_H_
+#pragma once
 
 #include <QList>
 #include <QMultiMap>
@@ -26,6 +25,7 @@
 #include "MAVLinkProtocol.h"
 #if !defined(__mobile__)
 #include "LogReplayLink.h"
+#include "UdpIODevice.h"
 #endif
 #include "QmlObjectListModel.h"
 
@@ -104,7 +104,7 @@ public:
 
     /// Creates, connects (and adds) a link  based on the given configuration instance.
     /// Link takes ownership of config.
-    LinkInterface* createConnectedLink(SharedLinkConfigurationPointer& config);
+    LinkInterface* createConnectedLink(SharedLinkConfigurationPointer& config, bool isPX4Flow = false);
 
     // This should only be used by Qml code
     Q_INVOKABLE void createConnectedLink(LinkConfiguration* config);
@@ -153,6 +153,13 @@ public:
 
     void startAutoConnectedLinks(void);
 
+    /// Reserves a mavlink channel for use
+    /// @return Mavlink channel index, 0 for no channels available
+    int _reserveMavlinkChannel(void);
+
+    /// Free the specified mavlink channel for re-use
+    void _freeMavlinkChannel(int channel);
+
     static const char*  settingsGroup;
 
 signals:
@@ -197,6 +204,8 @@ private:
     SerialConfiguration* _autoconnectConfigurationsContainsPort(const QString& portName);
 #endif
 
+    void _mavlinkMessageReceived(LinkInterface* link, mavlink_message_t message);
+
     bool    _configUpdateSuspended;                     ///< true: stop updating configuration list
     bool    _configurationsLoaded;                      ///< true: Link configurations have been loaded
     bool    _connectionsSuspended;                      ///< true: all new connections should not be allowed
@@ -210,6 +219,7 @@ private:
     QList<SharedLinkInterfacePointer>       _sharedLinks;
     QList<SharedLinkConfigurationPointer>   _sharedConfigurations;
     QList<SharedLinkConfigurationPointer>   _sharedAutoconnectConfigurations;
+    QString                                 _autoConnectRTKPort;
     QmlObjectListModel                      _qmlConfigurations;
 
     QMap<QString, int>  _autoconnectWaitList;   ///< key: QGCSerialPortInfo.systemLocation, value: wait count
@@ -225,6 +235,15 @@ private:
     static const char*  _defaultUPDLinkName;
     static const int    _autoconnectUpdateTimerMSecs;
     static const int    _autoconnectConnectDelayMSecs;
+
+    // NMEA GPS device for GCS position
+#ifndef __mobile__
+#ifndef NO_SERIAL_LINK
+    QString      _nmeaDeviceName;
+    QSerialPort* _nmeaPort;
+    uint32_t     _nmeaBaud;
+    UdpIODevice  _nmeaSocket;
+#endif
+#endif
 };
 
-#endif

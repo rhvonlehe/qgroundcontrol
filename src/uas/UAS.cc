@@ -26,7 +26,7 @@
 #include "UAS.h"
 #include "LinkInterface.h"
 #include "QGC.h"
-#include "GAudioOutput.h"
+#include "AudioOutput.h"
 #include "MAVLinkProtocol.h"
 #include "QGCMAVLink.h"
 #include "LinkManager.h"
@@ -72,10 +72,6 @@ UAS::UAS(MAVLinkProtocol* protocol, Vehicle* vehicle, FirmwarePluginManager * fi
     attitudeKnown(false),
     attitudeStamped(false),
     lastAttitude(0),
-
-    roll(0.0),
-    pitch(0.0),
-    yaw(0.0),
 
     imagePackets(0),    // We must initialize to 0, otherwise extended data packets maybe incorrectly thought to be images
 
@@ -131,17 +127,10 @@ UAS::UAS(MAVLinkProtocol* protocol, Vehicle* vehicle, FirmwarePluginManager * fi
     _firmwarePluginManager(firmwarePluginManager)
 {
 
-    for (unsigned int i = 0; i<255;++i)
-    {
-        componentID[i] = -1;
-        componentMulti[i] = false;
-    }
-
 #ifndef __mobile__
     connect(_vehicle, &Vehicle::mavlinkMessageReceived, &fileManager, &FileManager::receiveMessage);
 #endif
 
-    color = UASInterface::getNextColor();
 }
 
 /**
@@ -190,11 +179,8 @@ void UAS::receiveMessage(mavlink_message_t message)
     // Only accept messages from this system (condition 1)
     // and only then if a) attitudeStamped is disabled OR b) attitudeStamped is enabled
     // and we already got one attitude packet
-    if (message.sysid == uasId && (!attitudeStamped || (attitudeStamped && (lastAttitude != 0)) || message.msgid == MAVLINK_MSG_ID_ATTITUDE))
+    if (message.sysid == uasId && (!attitudeStamped || lastAttitude != 0 || message.msgid == MAVLINK_MSG_ID_ATTITUDE))
     {
-        QString uasState;
-        QString stateDescription;
-
         bool multiComponentSourceDetected = false;
         bool wrongComponent = false;
 
@@ -210,10 +196,11 @@ void UAS::receiveMessage(mavlink_message_t message)
         }
 
         // Store component ID
-        if (componentID[message.msgid] == -1)
+        if (!componentID.contains(message.msgid))
         {
             // Prefer the first component
             componentID[message.msgid] = message.compid;
+            componentMulti[message.msgid] = false;
         }
         else
         {
@@ -225,7 +212,9 @@ void UAS::receiveMessage(mavlink_message_t message)
             }
         }
 
-        if (componentMulti[message.msgid] == true) multiComponentSourceDetected = true;
+        if (componentMulti[message.msgid] == true) {
+            multiComponentSourceDetected = true;
+        }
 
 
         switch (message.msgid)
@@ -278,112 +267,11 @@ void UAS::receiveMessage(mavlink_message_t message)
             emit valueChanged(uasId, name.arg("drop_rate_comm"), "%", state.drop_rate_comm/100.0f, time);
         }
             break;
-        case MAVLINK_MSG_ID_ATTITUDE:
-        {
-            mavlink_attitude_t attitude;
-            mavlink_msg_attitude_decode(&message, &attitude);
-            quint64 time = getUnixReferenceTime(attitude.time_boot_ms);
-
-            emit attitudeChanged(this, message.compid, QGC::limitAngleToPMPIf(attitude.roll), QGC::limitAngleToPMPIf(attitude.pitch), QGC::limitAngleToPMPIf(attitude.yaw), time);
-
-            if (!wrongComponent)
-            {
-                lastAttitude = time;
-                setRoll(QGC::limitAngleToPMPIf(attitude.roll));
-                setPitch(QGC::limitAngleToPMPIf(attitude.pitch));
-                setYaw(QGC::limitAngleToPMPIf(attitude.yaw));
-
-                attitudeKnown = true;
-                emit attitudeChanged(this, getRoll(), getPitch(), getYaw(), time);
-            }
-        }
-            break;
-        case MAVLINK_MSG_ID_ATTITUDE_QUATERNION:
-        {
-            mavlink_attitude_quaternion_t attitude;
-            mavlink_msg_attitude_quaternion_decode(&message, &attitude);
-            quint64 time = getUnixReferenceTime(attitude.time_boot_ms);
-
-            double a = attitude.q1;
-            double b = attitude.q2;
-            double c = attitude.q3;
-            double d = attitude.q4;
-
-            double aSq = a * a;
-            double bSq = b * b;
-            double cSq = c * c;
-            double dSq = d * d;
-            float dcm[3][3];
-            dcm[0][0] = aSq + bSq - cSq - dSq;
-            dcm[0][1] = 2.0 * (b * c - a * d);
-            dcm[0][2] = 2.0 * (a * c + b * d);
-            dcm[1][0] = 2.0 * (b * c + a * d);
-            dcm[1][1] = aSq - bSq + cSq - dSq;
-            dcm[1][2] = 2.0 * (c * d - a * b);
-            dcm[2][0] = 2.0 * (b * d - a * c);
-            dcm[2][1] = 2.0 * (a * b + c * d);
-            dcm[2][2] = aSq - bSq - cSq + dSq;
-
-            float phi, theta, psi;
-            theta = asin(-dcm[2][0]);
-
-            if (fabs(theta - M_PI_2) < 1.0e-3f) {
-                phi = 0.0f;
-                psi = (atan2(dcm[1][2] - dcm[0][1],
-                        dcm[0][2] + dcm[1][1]) + phi);
-
-            } else if (fabs(theta + M_PI_2) < 1.0e-3f) {
-                phi = 0.0f;
-                psi = atan2f(dcm[1][2] - dcm[0][1],
-                          dcm[0][2] + dcm[1][1] - phi);
-
-            } else {
-                phi = atan2f(dcm[2][1], dcm[2][2]);
-                psi = atan2f(dcm[1][0], dcm[0][0]);
-            }
-
-            emit attitudeChanged(this, message.compid, QGC::limitAngleToPMPIf(phi),
-                                 QGC::limitAngleToPMPIf(theta),
-                                 QGC::limitAngleToPMPIf(psi), time);
-
-            if (!wrongComponent)
-            {
-                lastAttitude = time;
-                setRoll(QGC::limitAngleToPMPIf(phi));
-                setPitch(QGC::limitAngleToPMPIf(theta));
-                setYaw(QGC::limitAngleToPMPIf(psi));
-
-                attitudeKnown = true;
-                emit attitudeChanged(this, getRoll(), getPitch(), getYaw(), time);
-            }
-        }
-            break;
         case MAVLINK_MSG_ID_HIL_CONTROLS:
         {
             mavlink_hil_controls_t hil;
             mavlink_msg_hil_controls_decode(&message, &hil);
             emit hilControlsChanged(hil.time_usec, hil.roll_ailerons, hil.pitch_elevator, hil.yaw_rudder, hil.throttle, hil.mode, hil.nav_mode);
-        }
-            break;
-        case MAVLINK_MSG_ID_VFR_HUD:
-        {
-            mavlink_vfr_hud_t hud;
-            mavlink_msg_vfr_hud_decode(&message, &hud);
-            quint64 time = getUnixTime();
-
-            if (!attitudeKnown)
-            {
-                setYaw(QGC::limitAngleToPMPId((((double)hud.heading)/180.0)*M_PI));
-                emit attitudeChanged(this, getRoll(), getPitch(), getYaw(), time);
-            }
-        }
-            break;
-        case MAVLINK_MSG_ID_GLOBAL_VISION_POSITION_ESTIMATE:
-        {
-            mavlink_global_vision_position_estimate_t pos;
-            mavlink_msg_global_vision_position_estimate_decode(&message, &pos);
-            quint64 time = getUnixTime(pos.usec);
-            emit attitudeChanged(this, message.compid, pos.roll, pos.pitch, pos.yaw, time);
         }
             break;
 
@@ -414,32 +302,6 @@ void UAS::receiveMessage(mavlink_message_t message)
             emit valueChanged(uasId, "roll sp", "rad", roll, time);
             emit valueChanged(uasId, "pitch sp", "rad", pitch, time);
             emit valueChanged(uasId, "yaw sp", "rad", yaw, time);
-        }
-            break;
-
-        case MAVLINK_MSG_ID_STATUSTEXT:
-        {
-            QByteArray b;
-            b.resize(MAVLINK_MSG_STATUSTEXT_FIELD_TEXT_LEN+1);
-            mavlink_msg_statustext_get_text(&message, b.data());
-
-            // Ensure NUL-termination
-            b[b.length()-1] = '\0';
-            QString text = QString(b);
-            int severity = mavlink_msg_statustext_get_severity(&message);
-
-        // If the message is NOTIFY or higher severity, or starts with a '#',
-        // then read it aloud.
-            if (text.startsWith("#") || severity <= MAV_SEVERITY_NOTICE)
-            {
-                text.remove("#");
-                emit textMessageReceived(uasId, message.compid, severity, text);
-                _say(text.toLower(), severity);
-            }
-            else
-            {
-                emit textMessageReceived(uasId, message.compid, severity, text);
-            }
         }
             break;
 
@@ -1720,12 +1582,6 @@ void UAS::unsetRCToParameterMap()
                                            0.0f);
         _vehicle->sendMessageOnLink(_vehicle->priorityLink(), message);
     }
-}
-
-void UAS::_say(const QString& text, int severity)
-{
-    Q_UNUSED(severity);
-    qgcApp()->toolbox()->audioOutput()->say(text);
 }
 
 void UAS::shutdownVehicle(void)

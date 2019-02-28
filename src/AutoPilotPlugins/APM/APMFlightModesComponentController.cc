@@ -18,8 +18,8 @@ APMFlightModesComponentController::APMFlightModesComponentController(void)
     : _activeFlightMode(0)
     , _channelCount(Vehicle::cMaxRcChannels)
 {
-    _modeParamPrefix = _vehicle->rover() ? "MODE" : "FLTMODE";
-    _modeChannelParam = _vehicle->rover() ? "MODE_CH" : "FLTMODE_CH";
+    _modeParamPrefix = _vehicle->rover() ? QStringLiteral("MODE") : QStringLiteral("FLTMODE");
+    _modeChannelParam = _vehicle->rover() ? QStringLiteral("MODE_CH") : QStringLiteral("FLTMODE_CH");
 
     QStringList usedParams;
     for (int i=1; i<7; i++) {
@@ -68,7 +68,7 @@ void APMFlightModesComponentController::_rcChannelsChanged(int channelCount, int
     for (int i=0; i<6; i++) {
         _rgChannelOptionEnabled[i] = QVariant(false);
         channelValue = pwmValues[i+6];
-        if (channelValue != -1 && channelValue > 1800) {
+        if (channelValue > 1800) {
             _rgChannelOptionEnabled[i] = QVariant(true);
         }
     }

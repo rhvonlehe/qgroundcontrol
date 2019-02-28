@@ -28,7 +28,6 @@ CustomCommandWidgetController::CustomCommandWidgetController(void) :
     }
     QSettings settings;
     _customQmlFile = settings.value(_settingsKey).toString();
-    connect(qgcApp()->toolbox()->multiVehicleManager(), &MultiVehicleManager::activeVehicleChanged, this, &CustomCommandWidgetController::_activeVehicleChanged);
 }
 
 void CustomCommandWidgetController::sendCommand(int commandId, QVariant componentId, QVariant confirm, QVariant param1, QVariant param2, QVariant param3, QVariant param4, QVariant param5, QVariant param6, QVariant param7)
@@ -43,17 +42,10 @@ void CustomCommandWidgetController::sendCommand(int commandId, QVariant componen
     }
 }
 
-void CustomCommandWidgetController::_activeVehicleChanged(Vehicle* activeVehicle)
-{
-    if (activeVehicle) {
-        _vehicle = activeVehicle;
-    }
-}
-
 void CustomCommandWidgetController::selectQmlFile(void)
 {
     QSettings settings;
-    QString qmlFile = QGCQFileDialog::getOpenFileName(NULL, "Select custom Qml file", QString(), "Qml files (*.qml)");
+    QString qmlFile = QGCQFileDialog::getOpenFileName(NULL, tr("Select custom Qml file"), QString(), tr("Qml files (*.qml)"));
     if (qmlFile.isEmpty()) {
         _customQmlFile.clear();
         settings.remove(_settingsKey);

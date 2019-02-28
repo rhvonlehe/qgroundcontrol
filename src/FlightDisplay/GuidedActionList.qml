@@ -35,6 +35,10 @@ Rectangle {
 
     QGCPalette { id: qgcPal }
 
+    DeadMouseArea {
+        anchors.fill: parent
+    }
+
     ColumnLayout {
         id:                 actionColumn
         anchors.margins:    _root._margins
@@ -81,15 +85,11 @@ Rectangle {
                         }
 
                         QGCButton {
-                            id:                         actionButton
-                            anchors.horizontalCenter:   parent.horizontalCenter
-                            text:                       modelData.title
+                            id:                 actionButton
+                            text:               modelData.title
+                            Layout.alignment:   Qt.AlignCenter
 
                             onClicked: {
-                                if (modelData.action === guidedController.actionChangeAlt) {
-                                    altitudeSlider.reset()
-                                    altitudeSlider.visible = true
-                                }
                                 _root.visible = false
                                 guidedController.confirmAction(modelData.action)
                             }

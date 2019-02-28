@@ -22,12 +22,12 @@ class APMTuningComponent;
 class APMSafetyComponent;
 class APMSensorsComponent;
 class APMPowerComponent;
-class MotorComponent;
+class APMMotorComponent;
 class APMCameraComponent;
 class APMLightsComponent;
 class APMSubFrameComponent;
 class ESP8266Component;
-class MixersComponent;
+class APMHeliComponent;
 
 /// This is the APM specific implementation of the AutoPilot class.
 class APMAutoPilotPlugin : public AutoPilotPlugin
@@ -39,7 +39,7 @@ public:
     ~APMAutoPilotPlugin();
 
     // Overrides from AutoPilotPlugin
-    const QVariantList& vehicleComponents(void) final;
+    const QVariantList& vehicleComponents(void) override;
     QString prerequisiteSetup(VehicleComponent* component) const override;
 
 protected:
@@ -50,17 +50,14 @@ protected:
     APMSubFrameComponent*       _subFrameComponent;
     APMFlightModesComponent*    _flightModesComponent;
     APMPowerComponent*          _powerComponent;
-#if 0
-    // Temporarily removed, waiting for new command implementation
-    MotorComponent*             _motorComponent;
-#endif
+    APMMotorComponent*          _motorComponent;
     APMRadioComponent*          _radioComponent;
     APMSafetyComponent*         _safetyComponent;
     APMSensorsComponent*        _sensorsComponent;
     APMTuningComponent*         _tuningComponent;
     APMAirframeLoader*          _airframeFacts;
     ESP8266Component*           _esp8266Component;
-    MixersComponent*            _mixersComponent;
+    APMHeliComponent*           _heliComponent;
 
 private:
     QVariantList                _components;

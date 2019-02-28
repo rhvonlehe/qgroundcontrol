@@ -15,7 +15,7 @@
 
 APMTuningComponent::APMTuningComponent(Vehicle* vehicle, AutoPilotPlugin* autopilot, QObject* parent)
     : VehicleComponent(vehicle, autopilot, parent)
-    , _name("Tuning")
+    , _name(tr("Tuning"))
 {
 }
 
@@ -64,6 +64,9 @@ QUrl APMTuningComponent::setupSource(void) const
             if (_vehicle->parameterManager()->parameterExists(-1, QStringLiteral("CH9_OPT"))) {
                 qmlFile = QStringLiteral("qrc:/qml/APMTuningComponentCopter.qml");
             }
+            break;
+        case MAV_TYPE_SUBMARINE:
+            qmlFile = QStringLiteral("qrc:/qml/APMTuningComponentSub.qml");
             break;
         default:
             // No tuning panel

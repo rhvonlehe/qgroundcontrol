@@ -20,6 +20,7 @@ import QGroundControl.FlightMap     1.0
 
 /// Rally Point map visuals
 Item {
+    id: _root
     z: QGroundControl.zOrderMapItems
 
     property var    map
@@ -29,7 +30,7 @@ Item {
 
     property bool   _interactive:           interactive
     property var    _rallyPointsComponent
-    property bool   _rallyPointsSupported:  myRallyPointController.rallyPointsSupported
+    property bool   _rallyPointsSupported:  myRallyPointController.supported
     property var    _rallyPoints:           myRallyPointController.points
 
     Component.onCompleted: {
@@ -38,6 +39,20 @@ Item {
 
     Component.onDestruction: {
         _rallyPointsComponent.destroy()
+    }
+
+    Component {
+        id: dragAreaComponent
+
+        MissionItemIndicatorDrag {
+            mapControl:     _root.map
+            itemCoordinate: rallyPointObject.coordinate
+            visible:        rallyPointObject === myRallyPointController.currentRallyPoint
+
+            property var rallyPointObject
+
+            onItemCoordinateChanged: rallyPointObject.coordinate = itemCoordinate
+        }
     }
 
     Component {
@@ -54,7 +69,7 @@ Item {
             sourceItem: MissionItemIndexLabel {
                 id:         itemIndexLabel
                 label:      qsTr("R", "rally point map item label")
-                checked:    _editingLayer == _layerRallyPoints ? rallyPointObject == myRallyPointController.currentRallyPoint : false
+                checked:    _editingLayer == _layerRallyPoints ? rallyPointObject === myRallyPointController.currentRallyPoint : false
 
                 onClicked: myRallyPointController.currentRallyPoint = rallyPointObject
             }
@@ -72,17 +87,14 @@ Item {
                 property var _visuals: [ ]
 
                 Component.onCompleted: {
-                    var rallyPoint = rallyPointComponent.createObject(map)
-                    rallyPoint.coordinate = Qt.binding(function() { return object.coordinate })
-                    rallyPoint.rallyPointObject = Qt.binding(function() { return object })
-                    map.addMapItem(rallyPoint)
-                    _visuals.push(rallyPoint)
-/*
-                    var dragArea = dragAreaComponent.createObject(map, { "itemIndicator": dragHandle, "itemCoordinate": object.coordinate })
-                    dragArea.polygonVertex = Qt.binding(function() { return index })
-                    _visuals.push(dragHandle)
+                    var rallyPointIndicator = rallyPointComponent.createObject(map)
+                    rallyPointIndicator.coordinate = Qt.binding(function() { return object.coordinate })
+                    rallyPointIndicator.rallyPointObject = Qt.binding(function() { return object })
+                    map.addMapItem(rallyPointIndicator)
+                    _visuals.push(rallyPointIndicator)
+
+                    var dragArea = dragAreaComponent.createObject(map, { "itemIndicator": rallyPointIndicator, "rallyPointObject": object })
                     _visuals.push(dragArea)
-*/
                 }
 
                 Component.onDestruction: {

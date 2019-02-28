@@ -7,9 +7,7 @@
  *
  ****************************************************************************/
 
-
-#ifndef VisualMissionItem_H
-#define VisualMissionItem_H
+#pragma once
 
 #include <QObject>
 #include <QString>
@@ -20,7 +18,6 @@
 
 #include "QGCMAVLink.h"
 #include "QGC.h"
-#include "MavlinkQmlSingleton.h"
 #include "QmlObjectListModel.h"
 #include "Fact.h"
 #include "QGCLoggingCategory.h"
@@ -36,8 +33,8 @@ class VisualMissionItem : public QObject
     Q_OBJECT
 
 public:
-    VisualMissionItem(Vehicle* vehicle, QObject* parent = NULL);
-    VisualMissionItem(const VisualMissionItem& other, QObject* parent = NULL);
+    VisualMissionItem(Vehicle* vehicle, bool flyView, QObject* parent);
+    VisualMissionItem(const VisualMissionItem& other, bool flyView, QObject* parent);
 
     ~VisualMissionItem();
 
@@ -45,6 +42,7 @@ public:
 
     Q_PROPERTY(bool             homePosition                        READ homePosition                                                   CONSTANT)                                           ///< true: This item is being used as a home position indicator
     Q_PROPERTY(QGeoCoordinate   coordinate                          READ coordinate                         WRITE setCoordinate         NOTIFY coordinateChanged)                           ///< This is the entry point for a waypoint line into the item. For a simple item it is also the location of the item
+    Q_PROPERTY(double           terrainAltitude                     READ terrainAltitude                                                NOTIFY terrainAltitudeChanged)                      ///< The altitude of terrain at the coordinate position, NaN if not known
     Q_PROPERTY(bool             coordinateHasRelativeAltitude       READ coordinateHasRelativeAltitude                                  NOTIFY coordinateHasRelativeAltitudeChanged)        ///< true: coordinate.latitude is relative to home altitude
     Q_PROPERTY(QGeoCoordinate   exitCoordinate                      READ exitCoordinate                                                 NOTIFY exitCoordinateChanged)                       ///< This is the exit point for a waypoint line coming out of the item.
     Q_PROPERTY(bool             exitCoordinateHasRelativeAltitude   READ exitCoordinateHasRelativeAltitude                              NOTIFY exitCoordinateHasRelativeAltitudeChanged)    ///< true: coordinate.latitude is relative to home altitude
@@ -64,14 +62,20 @@ public:
     Q_PROPERTY(QString          mapVisualQML                        READ mapVisualQML                                                   CONSTANT)                                           ///< QMl code for map visuals
     Q_PROPERTY(QmlObjectListModel* childItems                       READ childItems                                                     CONSTANT)
     Q_PROPERTY(double           specifiedFlightSpeed                READ specifiedFlightSpeed                                           NOTIFY specifiedFlightSpeedChanged)                 ///< NaN if this item does not specify flight speed
-    Q_PROPERTY(double           specifiedGimbalYaw                  READ specifiedGimbalYaw                                             NOTIFY specifiedGimbalYawChanged)                   ///< NaN if this item goes not specify gimbal yaw
+    Q_PROPERTY(double           specifiedGimbalYaw                  READ specifiedGimbalYaw                                             NOTIFY specifiedGimbalYawChanged)                   ///< Gimbal yaw, NaN for not specified
+    Q_PROPERTY(double           specifiedGimbalPitch                READ specifiedGimbalPitch                                           NOTIFY specifiedGimbalPitchChanged)                 ///< Gimbal pitch, NaN for not specified
     Q_PROPERTY(double           missionGimbalYaw                    READ missionGimbalYaw                                               NOTIFY missionGimbalYawChanged)                     ///< Current gimbal yaw state at this point in mission
     Q_PROPERTY(double           missionVehicleYaw                   READ missionVehicleYaw                                              NOTIFY missionVehicleYawChanged)                    ///< Expected vehicle yaw at this point in mission
+    Q_PROPERTY(bool             flyView                             READ flyView                                                        CONSTANT)
+
+    Q_PROPERTY(QGCGeoBoundingCube* boundingCube                     READ boundingCube                                                   NOTIFY boundingCubeChanged)
 
     // The following properties are calculated/set by the MissionController recalc methods
 
     Q_PROPERTY(double altDifference     READ altDifference      WRITE setAltDifference      NOTIFY altDifferenceChanged)        ///< Change in altitude from previous waypoint
     Q_PROPERTY(double altPercent        READ altPercent         WRITE setAltPercent         NOTIFY altPercentChanged)           ///< Percent of total altitude change in mission altitude
+    Q_PROPERTY(double terrainPercent    READ terrainPercent     WRITE setTerrainPercent     NOTIFY terrainPercentChanged)       ///< Percent of terrain altitude in mission altitude
+    Q_PROPERTY(bool   terrainCollision  READ terrainCollision   WRITE setTerrainCollision   NOTIFY terrainCollisionChanged)     ///< true: Item collides with terrain
     Q_PROPERTY(double azimuth           READ azimuth            WRITE setAzimuth            NOTIFY azimuthChanged)              ///< Azimuth to previous waypoint
     Q_PROPERTY(double distance          READ distance           WRITE setDistance           NOTIFY distanceChanged)             ///< Distance to previous waypoint
 
@@ -82,15 +86,21 @@ public:
 
     double altDifference    (void) const { return _altDifference; }
     double altPercent       (void) const { return _altPercent; }
+    double terrainPercent   (void) const { return _terrainPercent; }
+    bool   terrainCollision (void) const { return _terrainCollision; }
     double azimuth          (void) const { return _azimuth; }
     double distance         (void) const { return _distance; }
     bool   isCurrentItem    (void) const { return _isCurrentItem; }
+    double terrainAltitude  (void) const { return _terrainAltitude; }
+    bool   flyView          (void) const { return _flyView; }
 
     QmlObjectListModel* childItems(void) { return &_childItems; }
 
     void setIsCurrentItem   (bool isCurrentItem);
     void setAltDifference   (double altDifference);
     void setAltPercent      (double altPercent);
+    void setTerrainPercent  (double terrainPercent);
+    void setTerrainCollision(bool terrainCollision);
     void setAzimuth         (double azimuth);
     void setDistance        (double distance);
 
@@ -102,7 +112,7 @@ public:
     virtual bool            isSimpleItem            (void) const = 0;
     virtual bool            isStandaloneCoordinate  (void) const = 0;
     virtual bool            specifiesCoordinate     (void) const = 0;
-    virtual bool            specifiesAltitudeOnly   (void) const = 0;;
+    virtual bool            specifiesAltitudeOnly   (void) const = 0;
     virtual QString         commandDescription      (void) const = 0;
     virtual QString         commandName             (void) const = 0;
     virtual QString         abbreviation            (void) const = 0;
@@ -111,6 +121,10 @@ public:
     virtual int             sequenceNumber          (void) const = 0;
     virtual double          specifiedFlightSpeed    (void) = 0;
     virtual double          specifiedGimbalYaw      (void) = 0;
+    virtual double          specifiedGimbalPitch    (void) = 0;
+
+    //-- Default implementation returns an invalid bounding cube
+    virtual QGCGeoBoundingCube* boundingCube        (void) { return &_boundingCube; }
 
     /// Update item to mission flight status at point where this item appears in mission.
     /// IMPORTANT: Overrides must call base class implementation
@@ -124,6 +138,11 @@ public:
     virtual void setCoordinate      (const QGeoCoordinate& coordinate) = 0;
     virtual void setSequenceNumber  (int sequenceNumber) = 0;
     virtual int  lastSequenceNumber (void) const = 0;
+
+    /// Specifies whether the item has all the data it needs such that it can be saved. Currently the only
+    /// case where this returns false is if it has not determined terrain values yet.
+    /// @return true: Ready to save, false: Still waiting on information
+    virtual bool readyForSave(void) const { return true; }
 
     /// Save the item(s) in Json format
     ///     @param missionItems Current set of mission items, new items should be appended to the end
@@ -140,6 +159,9 @@ public:
     /// Adjust the altitude of the item if appropriate to the new altitude.
     virtual void applyNewAltitude(double newAltitude) = 0;
 
+    /// @return Amount of additional time delay in seconds needed to fly this item
+    virtual double additionalTimeDelay(void) const = 0;
+
     double  missionGimbalYaw    (void) const { return _missionGimbalYaw; }
     double  missionVehicleYaw   (void) const { return _missionVehicleYaw; }
     void    setMissionVehicleYaw(double vehicleYaw);
@@ -151,6 +173,8 @@ public:
 signals:
     void altDifferenceChanged           (double altDifference);
     void altPercentChanged              (double altPercent);
+    void terrainPercentChanged          (double terrainPercent);
+    void terrainCollisionChanged        (double terrainCollision);
     void azimuthChanged                 (double azimuth);
     void commandDescriptionChanged      (void);
     void commandNameChanged             (void);
@@ -167,9 +191,13 @@ signals:
     void specifiesAltitudeOnlyChanged   (void);
     void specifiedFlightSpeedChanged    (void);
     void specifiedGimbalYawChanged      (void);
+    void specifiedGimbalPitchChanged    (void);
     void lastSequenceNumberChanged      (int sequenceNumber);
     void missionGimbalYawChanged        (double missionGimbalYaw);
     void missionVehicleYawChanged       (double missionVehicleYaw);
+    void terrainAltitudeChanged         (double terrainAltitude);
+    void additionalTimeDelayChanged     (void);
+    void boundingCubeChanged            (void);
 
     void coordinateHasRelativeAltitudeChanged       (bool coordinateHasRelativeAltitude);
     void exitCoordinateHasRelativeAltitudeChanged   (bool exitCoordinateHasRelativeAltitude);
@@ -177,21 +205,40 @@ signals:
 
 protected:
     Vehicle*    _vehicle;
+    bool        _flyView;
     bool        _isCurrentItem;
     bool        _dirty;
     bool        _homePositionSpecialCase;   ///< true: This item is being used as a ui home position indicator
+    double      _terrainAltitude;           ///< Altitude of terrain at coordinate position, NaN for not known
     double      _altDifference;             ///< Difference in altitude from previous waypoint
     double      _altPercent;                ///< Percent of total altitude change in mission
+    double      _terrainPercent;            ///< Percent of terrain altitude for coordinate
+    bool        _terrainCollision;          ///< true: item collides with terrain
     double      _azimuth;                   ///< Azimuth to previous waypoint
     double      _distance;                  ///< Distance to previous waypoint
     QString     _editorQml;                 ///< Qml resource for editing item
     double      _missionGimbalYaw;
     double      _missionVehicleYaw;
 
+    QGCGeoBoundingCube  _boundingCube;      ///< The bounding "cube" of this element.
+
     MissionController::MissionFlightStatus_t    _missionFlightStatus;
 
     /// This is used to reference any subsequent mission items which do not specify a coordinate.
     QmlObjectListModel  _childItems;
-};
 
-#endif
+protected:
+    void    _setBoundingCube                (QGCGeoBoundingCube bc);
+
+private slots:
+    void _updateTerrainAltitude (void);
+    void _reallyUpdateTerrainAltitude (void);
+    void _terrainDataReceived   (bool success, QList<double> heights);
+
+private:
+    void _commonInit(void);
+
+    QTimer _updateTerrainTimer;
+    double _lastLatTerrainQuery;
+    double _lastLonTerrainQuery;
+};

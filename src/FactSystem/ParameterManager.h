@@ -7,9 +7,7 @@
  *
  ****************************************************************************/
 
-
-#ifndef ParameterManager_H
-#define ParameterManager_H
+#pragma once
 
 #include <QObject>
 #include <QMap>
@@ -25,40 +23,35 @@
 #include "QGCMAVLink.h"
 #include "Vehicle.h"
 
-/// @file
-///     @author Don Gagne <don@thegagnes.com>
-
 Q_DECLARE_LOGGING_CATEGORY(ParameterManagerVerbose1Log)
 Q_DECLARE_LOGGING_CATEGORY(ParameterManagerVerbose2Log)
+Q_DECLARE_LOGGING_CATEGORY(ParameterManagerDebugCacheFailureLog)
 
-/// Connects to Parameter Manager to load/update Facts
 class ParameterManager : public QObject
 {
     Q_OBJECT
     
 public:
     /// @param uas Uas which this set of facts is associated with
-    ParameterManager(Vehicle* vehicle);
-    ~ParameterManager();
+    ParameterManager    (Vehicle* vehicle);
+    ~ParameterManager   ();
 
-    /// true: Parameters are ready for use
-    Q_PROPERTY(bool parametersReady READ parametersReady NOTIFY parametersReadyChanged)
-    bool parametersReady(void) { return _parametersReady; }
+    Q_PROPERTY(bool     parametersReady     READ parametersReady    NOTIFY parametersReadyChanged)      ///< true: Parameters are ready for use
+    Q_PROPERTY(bool     missingParameters   READ missingParameters  NOTIFY missingParametersChanged)    ///< true: Parameters are missing from firmware response, false: all parameters received from firmware
+    Q_PROPERTY(double   loadProgress        READ loadProgress       NOTIFY loadProgressChanged)
 
-    /// true: Parameters are missing from firmware response, false: all parameters received from firmware
-    Q_PROPERTY(bool missingParameters READ missingParameters NOTIFY missingParametersChanged)
-    bool missingParameters(void) { return _missingParameters; }
-
-    Q_PROPERTY(double loadProgress READ loadProgress NOTIFY loadProgressChanged)
-    double loadProgress(void) const { return _loadProgress; }
+    bool parametersReady    (void) const { return _parametersReady; }
+    bool missingParameters  (void) const { return _missingParameters; }
+    double loadProgress     (void) const { return _loadProgress; }
 
     /// @return Directory of parameter caches
     static QDir parameterCacheDir();
 
     /// @return Location of parameter cache file
     static QString parameterCacheFile(int vehicleId, int componentId);
-    
 
+    QList<int> componentIds(void);
+    
     /// Re-request the full set of parameters from the autopilot
     void refreshAllParameters(uint8_t componentID = MAV_COMP_ID_ALL);
 
@@ -84,7 +77,7 @@ public:
     ///     @param name Parameter name
     Fact* getParameter(int componentId, const QString& name);
     
-    const QMap<int, QMap<QString, QStringList> >& getGroupMap(void);
+    const QMap<QString, QMap<QString, QStringList> >& getDefaultComponentCategoryMap(void);
     
     /// Returns error messages from loading
     QString readParametersFromStream(QTextStream& stream);
@@ -137,32 +130,30 @@ protected:
 private:
     static QVariant _stringToTypedVariant(const QString& string, FactMetaData::ValueType_t type, bool failOk = false);
     int _actualComponentId(int componentId);
-    void _setupGroupMap(void);
+    void _setupDefaultComponentCategoryMap(void);
     void _readParameterRaw(int componentId, const QString& paramName, int paramIndex);
     void _writeParameterRaw(int componentId, const QString& paramName, const QVariant& value);
     void _writeLocalParamCache(int vehicleId, int componentId);
     void _tryCacheHashLoad(int vehicleId, int componentId, QVariant hash_value);
+    void _loadMetaData(void);
+    void _clearMetaData(void);
     void _addMetaDataToDefaultComponent(void);
     QString _remapParamNameToVersion(const QString& paramName);
     void _loadOfflineEditingParams(void);
-    QString _logVehiclePrefix(int componentId = -1);
+    QString _logVehiclePrefix(int componentId);
     void _setLoadProgress(double loadProgress);
     bool _fillIndexBatchQueue(bool waitingParamTimeout);
 
     MAV_PARAM_TYPE _factTypeToMavType(FactMetaData::ValueType_t factType);
     FactMetaData::ValueType_t _mavTypeToFactType(MAV_PARAM_TYPE mavType);
-    void _saveToEEPROM(void);
     void _checkInitialLoadComplete(void);
 
     /// First mapping is by component id
     /// Second mapping is parameter name, to Fact* in QVariant
     QMap<int, QVariantMap>            _mapParameterName2Variant;
 
-    QMap<int, QMap<int, QString> >    _mapParameterId2Name;
-    
-    /// First mapping is by component id
-    /// Second mapping is group name, to Fact
-    QMap<int, QMap<QString, QStringList> > _mapGroup2ParameterName;
+    // Category map of default component parameters
+    QMap<QString /* category */, QMap<QString /* group */, QStringList /* parameter names */> > _defaultComponentCategoryMap;
     
     double      _loadProgress;                  ///< Parameter load progess, [0.0,1.0]
     bool        _parametersReady;               ///< true: parameter load complete
@@ -170,9 +161,18 @@ private:
     bool        _initialLoadComplete;           ///< true: Initial load of all parameters complete, whether successful or not
     bool        _waitingForDefaultComponent;    ///< true: last chance wait for default component params
     bool        _saveRequired;                  ///< true: _saveToEEPROM should be called
+    bool        _metaDataAddedToFacts;          ///< true: FactMetaData has been adde to the default component facts
+    bool        _logReplay;                     ///< true: running with log replay link
     QString     _versionParam;                  ///< Parameter which contains parameter set version
     int         _parameterSetMajorVersion;      ///< Version for parameter set, -1 if not known
     QObject*    _parameterMetaData;             ///< Opaque data from FirmwarePlugin::loadParameterMetaDataCall
+
+    typedef QPair<int /* FactMetaData::ValueType_t */, QVariant /* Fact::rawValue */> ParamTypeVal;
+    typedef QMap<QString /* parameter name */, ParamTypeVal> CacheMapName2ParamTypeVal;
+
+    QMap<int /* component id */, bool>                                              _debugCacheCRC; ///< true: debug cache crc failure
+    QMap<int /* component id */, CacheMapName2ParamTypeVal>                         _debugCacheMap;
+    QMap<int /* component id */, QMap<QString /* param name */, bool /* seen */>>   _debugCacheParamSeen;
 
     // Wait counts from previous parameter update cycle
     int         _prevWaitingReadParamIndexCount;
@@ -201,7 +201,7 @@ private:
     
     QMutex _dataMutex;
     
-    static Fact _defaultFact;   ///< Used to return default fact, when parameter not found
+    Fact _defaultFact;   ///< Used to return default fact, when parameter not found
 
     static const char* _cachedMetaDataFilePrefix;
     static const char* _jsonParametersKey;
@@ -209,5 +209,3 @@ private:
     static const char* _jsonParamNameKey;
     static const char* _jsonParamValueKey;
 };
-
-#endif

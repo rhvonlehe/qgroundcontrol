@@ -19,7 +19,7 @@ import QGroundControl.FactSystem    1.0
 import QGroundControl.FactControls  1.0
 
 Rectangle {
-    height:     ScreenTools.defaultFontPixelHeight * 7
+    id:         root
     radius:     ScreenTools.defaultFontPixelWidth * 0.5
     color:      qgcPal.window
     opacity:    0.80
@@ -27,7 +27,13 @@ Rectangle {
 
     property var missionItems                ///< List of all available mission items
 
+    property real maxWidth:          parent.width
     readonly property real _margins: ScreenTools.defaultFontPixelWidth
+
+    onMaxWidthChanged: {
+        var calcLength = (statusListView.count + 1) * (statusListView.count ? statusListView.contentItem.children[0].width : 1)
+        root.width = root.maxWidth > calcLength ? calcLength : root.maxWidth
+    }
 
     QGCPalette { id: qgcPal }
 
@@ -35,7 +41,7 @@ Rectangle {
         id:                     label
         anchors.top:            parent.bottom
         width:                  parent.height
-        text:                   qsTr("Altitude")
+        text:                   qsTr("Terrain Altitude")
         horizontalAlignment:    Text.AlignHCenter
         rotation:               -90
         transformOrigin:        Item.TopLeft
@@ -54,17 +60,34 @@ Rectangle {
         orientation:            ListView.Horizontal
         spacing:                0
         clip:                   true
-        currentIndex:           _currentMissionIndex
+        currentIndex:           _missionController.currentPlanViewIndex
+
+        onCountChanged: {
+            var calcLength = (statusListView.count + 1) * (statusListView.count ? statusListView.contentItem.children[0].width : 1)
+            root.width = root.maxWidth > calcLength ? calcLength : root.maxWidth
+        }
 
         delegate: Item {
             height:     statusListView.height
             width:      display ? (indicator.width + spacing)  : 0
             visible:    display
 
-            property real availableHeight:  height - indicator.height
-            property bool graphAbsolute:    true
+            property real availableHeight:      height - indicator.height
+            property bool _coordValid:          object.coordinate.isValid
+            property bool _terrainAvailable:    !isNaN(object.terrainPercent)
+            property real _terrainPercent:      _terrainAvailable ? object.terrainPercent : 1
+
             readonly property bool display: object.specifiesCoordinate && !object.isStandaloneCoordinate
             readonly property real spacing: ScreenTools.defaultFontPixelWidth * ScreenTools.smallFontPointRatio
+
+            Rectangle {
+                anchors.bottom:             parent.bottom
+                anchors.horizontalCenter:   parent.horizontalCenter
+                width:                      indicator.width
+                height:                     _terrainAvailable ? Math.max(availableHeight * _terrainPercent, 1) : parent.height
+                color:                      _terrainAvailable ? (object.terrainCollision ? "red": qgcPal.text) : "yellow"
+                visible:                    _coordValid
+            }
 
             MissionItemIndexLabel {
                 id:                         indicator
@@ -73,8 +96,8 @@ Rectangle {
                 small:                      true
                 checked:                    object.isCurrentItem
                 label:                      object.abbreviation.charAt(0)
-                index:                      object.sequenceNumber
-                visible:                    object.relativeAltitude ? true : (object.homePosition || graphAbsolute)
+                index:                      object.abbreviation.charAt(0) > 'A' && object.abbreviation.charAt(0) < 'z' ? -1 : object.sequenceNumber
+                visible:                    true
             }
         }
     }

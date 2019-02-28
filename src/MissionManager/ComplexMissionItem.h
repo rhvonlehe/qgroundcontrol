@@ -11,19 +11,21 @@
 #define ComplexMissionItem_H
 
 #include "VisualMissionItem.h"
+#include "QGCGeo.h"
 
 class ComplexMissionItem : public VisualMissionItem
 {
     Q_OBJECT
 
 public:
-    ComplexMissionItem(Vehicle* vehicle, QObject* parent = NULL);
+    ComplexMissionItem(Vehicle* vehicle, bool flyView, QObject* parent);
 
     const ComplexMissionItem& operator=(const ComplexMissionItem& other);
 
     Q_PROPERTY(double   complexDistance     READ complexDistance    NOTIFY complexDistanceChanged)
 
     /// @return The distance covered the complex mission item in meters.
+    /// Signals complexDistanceChanged
     virtual double complexDistance(void) const = 0;
 
     /// Load the complex mission item from Json
@@ -36,13 +38,16 @@ public:
     /// Get the point of complex mission item furthest away from a coordinate
     ///     @param other QGeoCoordinate to which distance is calculated
     /// @return the greatest distance from any point of the complex item to some coordinate
+    /// Signals greatestDistanceToChanged
     virtual double greatestDistanceTo(const QGeoCoordinate &other) const = 0;
 
     /// This mission item attribute specifies the type of the complex item.
     static const char* jsonComplexItemTypeKey;
 
 signals:
-    void complexDistanceChanged(double complexDistance);
+    void complexDistanceChanged     (void);
+    void boundingCubeChanged        (void);
+    void greatestDistanceToChanged  (void);
 };
 
 #endif

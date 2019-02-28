@@ -13,16 +13,20 @@
 #include "CameraMetaData.h"
 #include "SettingsManager.h"
 #include "AppSettings.h"
+#include "QGCFileDownload.h"
 
+#include <QRegularExpression>
 #include <QDebug>
+
+QGC_LOGGING_CATEGORY(FirmwarePluginLog, "FirmwarePluginLog")
 
 static FirmwarePluginFactoryRegister* _instance = NULL;
 
-const char* guided_mode_not_supported_by_vehicle = "Guided mode not supported by Vehicle.";
+const QString guided_mode_not_supported_by_vehicle = QObject::tr("Guided mode not supported by Vehicle.");
 
 QVariantList FirmwarePlugin::_cameraList;
 
-const char* FirmwarePlugin::px4FollowMeFlightMode = "Follow Me";
+const QString FirmwarePlugin::px4FollowMeFlightMode(QObject::tr("Follow Me"));
 
 FirmwarePluginFactory::FirmwarePluginFactory(void)
 {
@@ -111,13 +115,6 @@ bool FirmwarePlugin::setFlightMode(const QString& flightMode, uint8_t* base_mode
     return false;
 }
 
-int FirmwarePlugin::manualControlReservedButtonCount(void)
-{
-    // We don't know whether the firmware is going to used any of these buttons.
-    // So reserve them all.
-    return -1;
-}
-
 int FirmwarePlugin::defaultJoystickTXMode(void)
 {
     return 2;
@@ -129,19 +126,15 @@ bool FirmwarePlugin::supportsThrottleModeCenterZero(void)
     return true;
 }
 
-bool FirmwarePlugin::supportsManualControl(void)
+bool FirmwarePlugin::supportsNegativeThrust(void)
 {
+    // By default, this is not supported
     return false;
 }
 
 bool FirmwarePlugin::supportsRadio(void)
 {
     return true;
-}
-
-bool FirmwarePlugin::supportsCalibratePressure(void)
-{
-    return false;
 }
 
 bool FirmwarePlugin::supportsMotorInterference(void)
@@ -152,6 +145,12 @@ bool FirmwarePlugin::supportsMotorInterference(void)
 bool FirmwarePlugin::supportsJSButton(void)
 {
     return false;
+}
+
+bool FirmwarePlugin::supportsTerrainFrame(void) const
+{
+    // Generic firmware supports this since we don't know
+    return true;
 }
 
 bool FirmwarePlugin::adjustIncomingMavlinkMessage(Vehicle* vehicle, mavlink_message_t* message)
@@ -260,16 +259,11 @@ void FirmwarePlugin::guidedModeLand(Vehicle* vehicle)
     qgcApp()->showMessage(guided_mode_not_supported_by_vehicle);
 }
 
-void FirmwarePlugin::guidedModeTakeoff(Vehicle* vehicle)
+void FirmwarePlugin::guidedModeTakeoff(Vehicle* vehicle, double takeoffAltRel)
 {
     // Not supported by generic vehicle
     Q_UNUSED(vehicle);
-    qgcApp()->showMessage(guided_mode_not_supported_by_vehicle);
-}
-
-void FirmwarePlugin::guidedModeOrbit(Vehicle* /*vehicle*/, const QGeoCoordinate& /*centerCoord*/, double /*radius*/, double /*velocity*/, double /*altitude*/)
-{
-    // Not supported by generic vehicle
+    Q_UNUSED(takeoffAltRel);
     qgcApp()->showMessage(guided_mode_not_supported_by_vehicle);
 }
 
@@ -338,7 +332,10 @@ const QVariantList &FirmwarePlugin::toolBarIndicators(const Vehicle* vehicle)
         _toolBarIndicatorList.append(QVariant::fromValue(QUrl::fromUserInput("qrc:/toolbar/RCRSSIIndicator.qml")));
         _toolBarIndicatorList.append(QVariant::fromValue(QUrl::fromUserInput("qrc:/toolbar/BatteryIndicator.qml")));
         _toolBarIndicatorList.append(QVariant::fromValue(QUrl::fromUserInput("qrc:/toolbar/ModeIndicator.qml")));
+        _toolBarIndicatorList.append(QVariant::fromValue(QUrl::fromUserInput("qrc:/toolbar/VTOLModeIndicator.qml")));
         _toolBarIndicatorList.append(QVariant::fromValue(QUrl::fromUserInput("qrc:/toolbar/ArmedIndicator.qml")));
+        _toolBarIndicatorList.append(QVariant::fromValue(QUrl::fromUserInput("qrc:/toolbar/GPSRTKIndicator.qml")));
+        _toolBarIndicatorList.append(QVariant::fromValue(QUrl::fromUserInput("qrc:/toolbar/LinkIndicator.qml")));
     }
     return _toolBarIndicatorList;
 }
@@ -350,84 +347,330 @@ const QVariantList& FirmwarePlugin::cameraList(const Vehicle* vehicle)
     if (_cameraList.size() == 0) {
         CameraMetaData* metaData;
 
-        metaData = new CameraMetaData(tr("Typhoon H CGO3+"),    // Camera name
-                                      6.264,                    // sensorWidth
-                                      4.698,                    // sensorHeight
-                                      4000,                     // imageWidth
-                                      3000,                     // imageHeight
-                                      14,                       // focalLength
-                                      true,                     // landscape orientation
-                                      true,                     // camera orientation is fixed
-                                      this);                    // parent
+        metaData = new CameraMetaData(
+            tr("Canon S100 @ 5.2mm f/2"),
+            7.6,                 // sensorWidth
+            5.7,                 // sensorHeight
+            4000,                // imageWidth
+            3000,                // imageHeight
+            5.2,                 // focalLength
+            true,                // true: landscape orientation
+            false,               // true: camera is fixed orientation
+            0,                   // minimum trigger interval
+            this);               // parent
         _cameraList.append(QVariant::fromValue(metaData));
 
-        metaData = new CameraMetaData(tr("Sony ILCE-QX1"),  //http://www.sony.co.uk/electronics/interchangeable-lens-cameras/ilce-qx1-body-kit/specifications
-                                      23.2,                 //http://www.sony.com/electronics/camera-lenses/sel16f28/specifications
-                                      15.4,
-                                      5456,
-                                      3632,
-                                      16,
-                                      true,
-                                      false,
-                                      this);
+        metaData = new CameraMetaData(
+            tr("Canon EOS-M 22mm f/2"),
+            22.3,                // sensorWidth
+            14.9,                // sensorHeight
+            5184,                // imageWidth
+            3456,                // imageHeight
+            22,                  // focalLength
+            true,                // true: landscape orientation
+            false,               // true: camera is fixed orientation
+            0,                   // minimum trigger interval
+            this);               // parent
         _cameraList.append(QVariant::fromValue(metaData));
 
-        metaData = new CameraMetaData(tr("Canon S100 PowerShot"),
-                                      7.6,
-                                      5.7,
-                                      4000,
-                                      3000,
-                                      5.2,
-                                      true,
-                                      false,
-                                      this);
+        metaData = new CameraMetaData(
+            tr("Canon G9X @ 10.2mm f/2"),
+            13.2,                // sensorWidth
+            8.8,                 // sensorHeight
+            5488,                // imageWidth
+            3680,                // imageHeight
+            10.2,                // focalLength
+            true,                // true: landscape orientation
+            false,               // true: camera is fixed orientation
+            0,                   // minimum trigger interval
+            this);               // parent
         _cameraList.append(QVariant::fromValue(metaData));
 
-        metaData = new CameraMetaData(tr("Canon G9 X PowerShot"),
-                                      13.2,
-                                      8.8,
-                                      5488,
-                                      3680,
-                                      10.2,
-                                      true,
-                                      false,
-                                      this);
+        metaData = new CameraMetaData(
+            tr("Canon SX260 HS @ 4.5mm f/3.5"),
+            6.17,                // sensorWidth
+            4.55,                // sensorHeight
+            4000,                // imageWidth
+            3000,                // imageHeight
+            4.5,                 // focalLength
+            true,                // true: landscape orientation
+            false,               // true: camera is fixed orientation
+            0,                   // minimum trigger interval
+            this);               // parent
         _cameraList.append(QVariant::fromValue(metaData));
 
-        metaData = new CameraMetaData(tr("Canon SX260 HS PowerShot"),
-                                      6.17,
-                                      4.55,
-                                      4000,
-                                      3000,
-                                      4.5,
-                                      true,
-                                      false,
-                                      this);
-
-        metaData = new CameraMetaData(tr("Canon EOS-M 22mm"),
-                                      22.3,
-                                      14.9,
-                                      5184,
-                                      3456,
-                                      22,
-                                      true,
-                                      false,
-                                      this);
+        metaData = new CameraMetaData(
+            tr("GoPro Hero 4"),
+            6.17,               // sensorWidth
+            4.55,               // sendsorHeight
+            4000,               // imageWidth
+            3000,               // imageHeight
+            2.98,               // focalLength
+            true,               // landscape
+            false,              // fixedOrientation
+            0,                  // minTriggerInterval
+            this);
         _cameraList.append(QVariant::fromValue(metaData));
 
-        metaData = new CameraMetaData(tr("Sony a6000 16mm"),    //http://www.sony.co.uk/electronics/interchangeable-lens-cameras/ilce-6000-body-kit#product_details_default
-                                      23.5,
-                                      15.6,
-                                      6000,
-                                      4000,
-                                      16,
-                                      true,
-                                      false,
-                                      this);
+        metaData = new CameraMetaData(
+            tr("Parrot Sequoia RGB"),
+            6.17,               // sensorWidth
+            4.63,               // sendsorHeight
+            4608,               // imageWidth
+            3456,               // imageHeight
+            4.9,                // focalLength
+            true,               // landscape
+            false,              // fixedOrientation
+            1,                  // minTriggerInterval
+            this);
         _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            tr("Parrot Sequoia Monochrome"),
+            4.8,                // sensorWidth
+            3.6,                // sendsorHeight
+            1280,               // imageWidth
+            960,                // imageHeight
+            4.0,                // focalLength
+            true,               // landscape
+            false,              // fixedOrientation
+            0.8,                // minTriggerInterval
+            this);
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            tr("RedEdge"),
+            4.8,                // sensorWidth
+            3.6,                // sendsorHeight
+            1280,               // imageWidth
+            960,                // imageHeight
+            5.5,                // focalLength
+            true,               // landscape
+            false,              // fixedOrientation
+            0,                  // minTriggerInterval
+            this);
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            tr("Ricoh GR II 18.3mm f/2.8"),
+            23.7,               // sensorWidth
+            15.7,               // sendsorHeight
+            4928,               // imageWidth
+            3264,               // imageHeight
+            18.3,               // focalLength
+            true,               // landscape
+            false,              // fixedOrientation
+            0,                  // minTriggerInterval
+            this);
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            tr("Sentera Double 4K Sensor"),
+            6.2,                // sensorWidth
+            4.65,               // sendsorHeight
+            4000,               // imageWidth
+            3000,               // imageHeight
+            5.4,                // focalLength
+            true,               // landscape
+            false,              // fixedOrientation
+            0,                  // minTriggerInterval
+            this);
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            tr("Sentera NDVI Single Sensor"),
+            4.68,               // sensorWidth
+            3.56,               // sendsorHeight
+            1248,               // imageWidth
+            952,                // imageHeight
+            4.14,               // focalLength
+            true,               // landscape
+            false,              // fixedOrientation
+            0,                  // minTriggerInterval
+            this);
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            //-- http://www.sony.co.uk/electronics/interchangeable-lens-cameras/ilce-6000-body-kit#product_details_default
+            tr("Sony a6000 Sony 16mm f/2.8"),
+            23.5,               // sensorWidth
+            15.6,               // sensorHeight
+            6000,               // imageWidth
+            4000,               // imageHeight
+            16,                 // focalLength
+            true,               // true: landscape orientation
+            false,              // true: camera is fixed orientation
+            2.0,                // minimum trigger interval
+            this);              // parent
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            tr("Sony a6300 Zeiss 21mm f/2.8"),
+            23.5,               // sensorWidth
+            15.6,               // sensorHeight
+            6000,               // imageWidth
+            4000,               // imageHeight
+            21,                 // focalLength
+            true,               // true: landscape orientation
+            true,               // true: camera is fixed orientation
+            2.0,                // minimum trigger interval
+            this);              // parent
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            tr("Sony a6300 Sony 28mm f/2.0"),
+            23.5,               // sensorWidth
+            15.6,               // sensorHeight
+            6000,               // imageWidth
+            4000,               // imageHeight
+            28,                 // focalLength
+            true,               // true: landscape orientation
+            true,               // true: camera is fixed orientation
+            2.0,                // minimum trigger interval
+            this);              // parent
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            tr("Sony a7R II Zeiss 21mm f/2.8"),
+            35.814,             // sensorWidth
+            23.876,             // sensorHeight
+            7952,               // imageWidth
+            5304,               // imageHeight
+            21,                 // focalLength
+            true,               // true: landscape orientation
+            true,               // true: camera is fixed orientation
+            2.0,                // minimum trigger interval
+            this);              // parent
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            tr("Sony a7R II Sony 28mm f/2.0"),
+            35.814,             // sensorWidth
+            23.876,             // sensorHeight
+            7952,               // imageWidth
+            5304,               // imageHeight
+            28,                 // focalLength
+            true,               // true: landscape orientation
+            true,               // true: camera is fixed orientation
+            2.0,                // minimum trigger interval
+            this);              // parent
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            tr("Sony DSC-QX30U @ 4.3mm f/3.5"),
+            7.82,               // sensorWidth
+            5.865,              // sensorHeight
+            5184,               // imageWidth
+            3888,               // imageHeight
+            4.3,                // focalLength
+            true,               // true: landscape orientation
+            false,              // true: camera is fixed orientation
+            2.0,                // minimum trigger interval
+            this);              // parent
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            //-- http://www.sony.co.uk/electronics/interchangeable-lens-cameras/ilce-qx1-body-kit/specifications
+            //-- http://www.sony.com/electronics/camera-lenses/sel16f28/specifications
+            tr("Sony ILCE-QX1 Sony 16mm f/2.8"),
+            23.2,                // sensorWidth
+            15.4,                // sensorHeight
+            5456,                // imageWidth
+            3632,                // imageHeight
+            16,                  // focalLength
+            true,                // true: landscape orientation
+            false,               // true: camera is fixed orientation
+            0,                   // minimum trigger interval
+            this);               // parent
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            //-- http://www.sony.co.uk/electronics/interchangeable-lens-cameras/ilce-qx1-body-kit/specifications
+            tr("Sony NEX-5R Sony 20mm f/2.8"),
+            23.2,                // sensorWidth
+            15.4,                // sensorHeight
+            4912,                // imageWidth
+            3264,                // imageHeight
+            20,                  // focalLength
+            true,                // true: landscape orientation
+            false,               // true: camera is fixed orientation
+            1,                   // minimum trigger interval
+            this);               // parent
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            tr("Sony RX100 II @ 10.4mm f/1.8"),
+            13.2,                // sensorWidth
+            8.8,                 // sensorHeight
+            5472,                // imageWidth
+            3648,                // imageHeight
+            10.4,                // focalLength
+            true,                // true: landscape orientation
+            false,               // true: camera is fixed orientation
+            0,                   // minimum trigger interval
+            this);               // parent
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            tr("Yuneec CGOET"),
+            5.6405,             // sensorWidth
+            3.1813,             // sensorHeight
+            1920,               // imageWidth
+            1080,               // imageHeight
+            3.5,                // focalLength
+            true,               // true: landscape orientation
+            true,               // true: camera is fixed orientation
+            1.3,                // minimum trigger interval
+            this);              // parent
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            tr("Yuneec E10T"),
+            5.6405,             // sensorWidth
+            3.1813,             // sensorHeight
+            1920,               // imageWidth
+            1080,               // imageHeight
+            23,                 // focalLength
+            true,               // true: landscape orientation
+            true,               // true: camera is fixed orientation
+            1.3,                // minimum trigger interval
+            this);              // parent
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            tr("Yuneec E50"),
+            6.2372,             // sensorWidth
+            4.7058,             // sensorHeight
+            4000,               // imageWidth
+            3000,               // imageHeight
+            7.2,                // focalLength
+            true,               // true: landscape orientation
+            true,               // true: camera is fixed orientation
+            1.3,                // minimum trigger interval
+            this);              // parent
+        _cameraList.append(QVariant::fromValue(metaData));
+
+        metaData = new CameraMetaData(
+            tr("Yuneec E90"),
+            13.3056,            // sensorWidth
+            8.656,              // sensorHeight
+            5472,               // imageWidth
+            3648,               // imageHeight
+            8.29,               // focalLength
+            true,               // true: landscape orientation
+            true,               // true: camera is fixed orientation
+            1.3,                // minimum trigger interval
+            this);              // parent
+        _cameraList.append(QVariant::fromValue(metaData));
+
     }
 
     return _cameraList;
+}
+
+QMap<QString, FactGroup*>* FirmwarePlugin::factGroups(void) {
+    // Generic plugin has no FactGroups
+    return nullptr;
 }
 
 bool FirmwarePlugin::vehicleYawsToNextWaypointInMission(const Vehicle* vehicle) const
@@ -435,22 +678,64 @@ bool FirmwarePlugin::vehicleYawsToNextWaypointInMission(const Vehicle* vehicle) 
     return vehicle->multiRotor() ? false : true;
 }
 
-bool FirmwarePlugin::_armVehicle(Vehicle* vehicle)
+bool FirmwarePlugin::_armVehicleAndValidate(Vehicle* vehicle)
 {
-    if (!vehicle->armed()) {
-        vehicle->setArmed(true);
+    if (vehicle->armed()) {
+        return true;
     }
 
-    // Wait for vehicle to return armed state for 2 seconds
-    for (int i=0; i<20; i++) {
-        if (vehicle->armed()) {
+    bool armedChanged = false;
+
+    // We try arming 3 times
+    for (int retries=0; retries<3; retries++) {
+        vehicle->setArmed(true);
+
+        // Wait for vehicle to return armed state for 3 seconds
+        for (int i=0; i<30; i++) {
+            if (vehicle->armed()) {
+                armedChanged = true;
+                break;
+            }
+            QGC::SLEEP::msleep(100);
+            qgcApp()->processEvents(QEventLoop::ExcludeUserInputEvents);
+        }
+        if (armedChanged) {
             break;
         }
-        QGC::SLEEP::msleep(100);
-        qgcApp()->processEvents(QEventLoop::ExcludeUserInputEvents);
     }
-    return vehicle->armed();
+
+    return armedChanged;
 }
+
+bool FirmwarePlugin::_setFlightModeAndValidate(Vehicle* vehicle, const QString& flightMode)
+{
+    if (vehicle->flightMode() == flightMode) {
+        return true;
+    }
+
+    bool flightModeChanged = false;
+
+    // We try 3 times
+    for (int retries=0; retries<3; retries++) {
+        vehicle->setFlightMode(flightMode);
+
+        // Wait for vehicle to return flight mode
+        for (int i=0; i<13; i++) {
+            if (vehicle->flightMode() == flightMode) {
+                flightModeChanged = true;
+                break;
+            }
+            QGC::SLEEP::msleep(100);
+            qgcApp()->processEvents(QEventLoop::ExcludeUserInputEvents);
+        }
+        if (flightModeChanged) {
+            break;
+        }
+    }
+
+    return flightModeChanged;
+}
+
 
 void FirmwarePlugin::batteryConsumptionData(Vehicle* vehicle, int& mAhBattery, double& hoverAmps, double& cruiseAmps) const
 {
@@ -466,12 +751,144 @@ QString FirmwarePlugin::autoDisarmParameter(Vehicle* vehicle)
     return QString();
 }
 
-void FirmwarePlugin::missionFlightSpeedInfo(Vehicle* vehicle, double& hoverSpeed, double& cruiseSpeed)
+bool FirmwarePlugin::hasGimbal(Vehicle* vehicle, bool& rollSupported, bool& pitchSupported, bool& yawSupported)
 {
     Q_UNUSED(vehicle);
+    rollSupported = false;
+    pitchSupported = false;
+    yawSupported = false;
+    return false;
+}
 
-    // Best we can do is use settings
-    AppSettings* appSettings = qgcApp()->toolbox()->settingsManager()->appSettings();
-    hoverSpeed = appSettings->offlineEditingHoverSpeed()->rawValue().toDouble();
-    cruiseSpeed = appSettings->offlineEditingCruiseSpeed()->rawValue().toDouble();
+bool FirmwarePlugin::isVtol(const Vehicle* vehicle) const
+{
+    switch (vehicle->vehicleType()) {
+    case MAV_TYPE_VTOL_DUOROTOR:
+    case MAV_TYPE_VTOL_QUADROTOR:
+    case MAV_TYPE_VTOL_TILTROTOR:
+    case MAV_TYPE_VTOL_RESERVED2:
+    case MAV_TYPE_VTOL_RESERVED3:
+    case MAV_TYPE_VTOL_RESERVED4:
+    case MAV_TYPE_VTOL_RESERVED5:
+        return true;
+    default:
+        return false;
+    }
+}
+
+QGCCameraManager* FirmwarePlugin::createCameraManager(Vehicle* vehicle)
+{
+    Q_UNUSED(vehicle);
+    return nullptr;
+}
+
+QGCCameraControl* FirmwarePlugin::createCameraControl(const mavlink_camera_information_t *info, Vehicle *vehicle, int compID, QObject* parent)
+{
+    Q_UNUSED(info);
+    Q_UNUSED(vehicle);
+    Q_UNUSED(compID);
+    Q_UNUSED(parent);
+    return nullptr;
+}
+
+uint32_t FirmwarePlugin::highLatencyCustomModeTo32Bits(uint16_t hlCustomMode)
+{
+    // Standard implementation assumes no special handling. Upper part of 32 bit value is not used.
+    return hlCustomMode;
+}
+
+void FirmwarePlugin::checkIfIsLatestStable(Vehicle* vehicle)
+{
+    // This is required as mocklink uses a hardcoded firmware version
+    if (qgcApp()->runningUnitTests()) {
+        qCDebug(FirmwarePluginLog) << "Skipping version check";
+        return;
+    }
+    QString versionFile = _getLatestVersionFileUrl(vehicle);
+    qCDebug(FirmwarePluginLog) << "Downloading" << versionFile;
+    QGCFileDownload* downloader = new QGCFileDownload(this);
+    connect(
+        downloader,
+        &QGCFileDownload::downloadFinished,
+        this,
+        [vehicle, this](QString remoteFile, QString localFile) {
+            _versionFileDownloadFinished(remoteFile, localFile, vehicle);
+            sender()->deleteLater();
+        });
+    downloader->download(versionFile);
+}
+
+void FirmwarePlugin::_versionFileDownloadFinished(QString& remoteFile, QString& localFile, Vehicle* vehicle)
+{
+    qCDebug(FirmwarePluginLog) << "Download complete" << remoteFile << localFile;
+    // Now read the version file and pull out the version string
+    QFile versionFile(localFile);
+    if (!versionFile.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qCWarning(FirmwarePluginLog) << "Error opening downloaded version file.";
+        return;
+    }
+
+    QTextStream stream(&versionFile);
+    QString versionFileContents = stream.readAll();
+    QString version;
+    QRegularExpressionMatch match = QRegularExpression(_versionRegex()).match(versionFileContents);
+
+    qCDebug(FirmwarePluginLog) << "Looking for version number...";
+
+    if (match.hasMatch()) {
+        version = match.captured(1);
+    } else {
+        qCWarning(FirmwarePluginLog) << "Unable to parse version info from file" << remoteFile;
+        return;
+    }
+
+    qCDebug(FirmwarePluginLog) << "Latest stable version = "  << version;
+
+    int currType = vehicle->firmwareVersionType();
+
+    // Check if lower version than stable or same version but different type
+    if (currType == FIRMWARE_VERSION_TYPE_OFFICIAL && vehicle->versionCompare(version) < 0) {
+        const static QString currentVersion = QString("%1.%2.%3").arg(vehicle->firmwareMajorVersion())
+                                                                 .arg(vehicle->firmwareMinorVersion())
+                                                                 .arg(vehicle->firmwarePatchVersion());
+        const static QString message = tr("Vehicle is not running latest stable firmware! Running %2-%1, latest stable is %3.");
+        qgcApp()->showMessage(message.arg(vehicle->firmwareVersionTypeString(), currentVersion, version));
+    }
+}
+
+int FirmwarePlugin::versionCompare(Vehicle* vehicle, int major, int minor, int patch)
+{
+    int currMajor = vehicle->firmwareMajorVersion();
+    int currMinor = vehicle->firmwareMinorVersion();
+    int currPatch = vehicle->firmwarePatchVersion();
+
+    if (currMajor == major && currMinor == minor && currPatch == patch) {
+        return 0;
+    }
+
+    if (currMajor > major
+       || (currMajor == major && currMinor > minor)
+       || (currMajor == major && currMinor == minor && currPatch > patch))
+    {
+        return 1;
+    }
+    return -1;
+}
+
+int FirmwarePlugin::versionCompare(Vehicle* vehicle, QString& compare)
+{
+    QStringList versionNumbers = compare.split(".");
+    if(versionNumbers.size() != 3) {
+        qCWarning(FirmwarePluginLog) << "Error parsing version number: wrong format";
+        return -1;
+    }
+    int major = versionNumbers[0].toInt();
+    int minor = versionNumbers[1].toInt();
+    int patch = versionNumbers[2].toInt();
+    return versionCompare(vehicle, major, minor, patch);
+}
+
+QString FirmwarePlugin::gotoFlightMode(void) const
+{
+    return QString();
 }

@@ -17,42 +17,55 @@ class VideoSettings : public SettingsGroup
     Q_OBJECT
 
 public:
-    VideoSettings(QObject* parent = NULL);
+    VideoSettings(QObject* parent = nullptr);
+    DEFINE_SETTING_NAME_GROUP()
 
-    Q_PROPERTY(Fact* videoSource    READ videoSource    CONSTANT)
-    Q_PROPERTY(Fact* udpPort        READ udpPort        CONSTANT)
-    Q_PROPERTY(Fact* rtspUrl        READ rtspUrl        CONSTANT)
-    Q_PROPERTY(Fact* videoSavePath  READ videoSavePath  CONSTANT)
-    Q_PROPERTY(Fact* aspectRatio    READ aspectRatio    CONSTANT)
-    Q_PROPERTY(Fact* gridLines      READ gridLines      CONSTANT)
+    DEFINE_SETTINGFACT(videoSource)
+    DEFINE_SETTINGFACT(udpPort)
+    DEFINE_SETTINGFACT(tcpUrl)
+    DEFINE_SETTINGFACT(rtspUrl)
+    DEFINE_SETTINGFACT(aspectRatio)
+    DEFINE_SETTINGFACT(videoFit)
+    DEFINE_SETTINGFACT(gridLines)
+    DEFINE_SETTINGFACT(showRecControl)
+    DEFINE_SETTINGFACT(recordingFormat)
+    DEFINE_SETTINGFACT(maxVideoSize)
+    DEFINE_SETTINGFACT(enableStorageLimit)
+    DEFINE_SETTINGFACT(rtspTimeout)
+    DEFINE_SETTINGFACT(streamEnabled)
+    DEFINE_SETTINGFACT(disableWhenDisarmed)
 
-    Fact* videoSource   (void);
-    Fact* udpPort       (void);
-    Fact* rtspUrl       (void);
-    Fact* videoSavePath (void);
-    Fact* aspectRatio   (void);
-    Fact* gridLines     (void);
+    Q_PROPERTY(bool     streamConfigured        READ streamConfigured       NOTIFY streamConfiguredChanged)
+    Q_PROPERTY(QString  rtspVideoSource         READ rtspVideoSource        CONSTANT)
+    Q_PROPERTY(QString  udpVideoSource          READ udpVideoSource         CONSTANT)
+    Q_PROPERTY(QString  tcpVideoSource          READ tcpVideoSource         CONSTANT)
+    Q_PROPERTY(QString  mpegtsVideoSource       READ mpegtsVideoSource      CONSTANT)
 
-    static const char* videoSettingsGroupName;
-
-    static const char* videoSourceName;
-    static const char* udpPortName;
-    static const char* rtspUrlName;
-    static const char* videoSavePathName;
-    static const char* videoAspectRatioName;
-    static const char* videoGridLinesName;
+    bool     streamConfigured       ();
+    QString  rtspVideoSource        () { return videoSourceRTSP; }
+    QString  udpVideoSource         () { return videoSourceUDP; }
+    QString  tcpVideoSource         () { return videoSourceTCP; }
+    QString  mpegtsVideoSource      () { return videoSourceMPEGTS; }
 
     static const char* videoSourceNoVideo;
+    static const char* videoDisabled;
     static const char* videoSourceUDP;
     static const char* videoSourceRTSP;
+    static const char* videoSourceTCP;
+    static const char* videoSourceMPEGTS;
+
+signals:
+    void streamConfiguredChanged    ();
+
+private slots:
+    void _configChanged             (QVariant value);
 
 private:
-    SettingsFact* _videoSourceFact;
-    SettingsFact* _udpPortFact;
-    SettingsFact* _rtspUrlFact;
-    SettingsFact* _videoSavePathFact;
-    SettingsFact* _videoAspectRatioFact;
-    SettingsFact* _gridLinesFact;
+    void _setDefaults               ();
+
+private:
+    bool _noVideo = false;
+
 };
 
 #endif

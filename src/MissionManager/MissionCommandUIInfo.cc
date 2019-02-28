@@ -85,7 +85,7 @@ const MissionCommandUIInfo& MissionCommandUIInfo::operator=(const MissionCommand
     _infoMap =          other._infoMap;
     _paramRemoveList =  other._paramRemoveList;
 
-    foreach (int index, other._paramInfoMap.keys()) {
+    for (int index: other._paramInfoMap.keys()) {
         _paramInfoMap[index] = new MissionCmdParamInfo(*other._paramInfoMap[index], this);
     }
 
@@ -167,19 +167,19 @@ bool MissionCommandUIInfo::specifiesAltitudeOnly(void) const
 void MissionCommandUIInfo::_overrideInfo(MissionCommandUIInfo* uiInfo)
 {
     // Override info values
-    foreach (const QString& valueKey, uiInfo->_infoMap.keys()) {
+    for (const QString& valueKey: uiInfo->_infoMap.keys()) {
         _setInfoValue(valueKey, uiInfo->_infoMap[valueKey]);
     }
 
     // Add to the remove params list
-    foreach (int removeIndex, uiInfo->_paramRemoveList) {
+    for (int removeIndex: uiInfo->_paramRemoveList) {
         if (!_paramRemoveList.contains(removeIndex)) {
             _paramRemoveList.append(removeIndex);
         }
     }
 
     // Override param info
-    foreach (const int paramIndex, uiInfo->_paramInfoMap.keys()) {
+    for (const int paramIndex: uiInfo->_paramInfoMap.keys()) {
         _paramRemoveList.removeOne(paramIndex);
         // MissionCmdParamInfo objects are owned by MissionCommandTree are are in existence for the entire run so
         // we can just use the same pointer reference.
@@ -202,7 +202,7 @@ bool MissionCommandUIInfo::loadJsonInfo(const QJsonObject& jsonObject, bool requ
             << _paramRemoveJsonKey << _categoryJsonKey << _specifiesAltitudeOnlyJsonKey;
 
     // Look for unknown keys in top level object
-    foreach (const QString& key, jsonObject.keys()) {
+    for (const QString& key: jsonObject.keys()) {
         if (!allKeys.contains(key) && key != _commentJsonKey) {
             errorString = _loadErrorString(QString("Unknown key: %1").arg(key));
             return false;
@@ -267,7 +267,7 @@ bool MissionCommandUIInfo::loadJsonInfo(const QJsonObject& jsonObject, bool requ
     }
     if (jsonObject.contains(_paramRemoveJsonKey)) {
         QStringList indexList = jsonObject.value(_paramRemoveJsonKey).toString().split(QStringLiteral(","));
-        foreach (const QString& indexString, indexList) {
+        for (const QString& indexString: indexList) {
             _paramRemoveList.append(indexString.toInt());
         }
     }
@@ -308,7 +308,7 @@ bool MissionCommandUIInfo::loadJsonInfo(const QJsonObject& jsonObject, bool requ
     }
 
     QString debugOutput;
-    foreach (const QString& infoKey, _infoMap.keys()) {
+    for (const QString& infoKey: _infoMap.keys()) {
         debugOutput.append(QString("MavCmdInfo %1: %2 ").arg(infoKey).arg(_infoMap[infoKey].toString()));
     }
     qCDebug(MissionCommandsLog) << debugOutput;
@@ -325,7 +325,7 @@ bool MissionCommandUIInfo::loadJsonInfo(const QJsonObject& jsonObject, bool requ
             allParamKeys << _defaultJsonKey << _decimalPlacesJsonKey << _enumStringsJsonKey << _enumValuesJsonKey << _labelJsonKey << _unitsJsonKey << _nanUnchangedJsonKey;
 
             // Look for unknown keys in param object
-            foreach (const QString& key, paramObject.keys()) {
+            for (const QString& key: paramObject.keys()) {
                 if (!allParamKeys.contains(key) && key != _commentJsonKey) {
                     errorString = _loadErrorString(QString("Unknown param key: %1").arg(key));
                     return false;
@@ -334,7 +334,7 @@ bool MissionCommandUIInfo::loadJsonInfo(const QJsonObject& jsonObject, bool requ
 
             // Validate key types
             QList<QJsonValue::Type> types;
-            types << QJsonValue::Double <<  QJsonValue::Double << QJsonValue::String << QJsonValue::String << QJsonValue::String << QJsonValue::String << QJsonValue::Bool;
+            types << QJsonValue::Null <<  QJsonValue::Double << QJsonValue::String << QJsonValue::String << QJsonValue::String << QJsonValue::String << QJsonValue::Bool;
             if (!JsonHelper::validateKeyTypes(jsonObject, allParamKeys, types, internalError)) {
                 errorString = _loadErrorString(internalError);
                 return false;
@@ -358,13 +358,21 @@ bool MissionCommandUIInfo::loadJsonInfo(const QJsonObject& jsonObject, bool requ
             paramInfo->_nanUnchanged =  paramObject.value(_nanUnchangedJsonKey).toBool(false);
 
             if (paramObject.contains(_defaultJsonKey)) {
-                paramInfo->_defaultValue = paramObject.value(_defaultJsonKey).toDouble(0.0);
+                if (paramInfo->_nanUnchanged) {
+                    paramInfo->_defaultValue = JsonHelper::possibleNaNJsonValue(paramObject[_defaultJsonKey]);
+                } else {
+                    if (paramObject[_defaultJsonKey].type() == QJsonValue::Null) {
+                        errorString = QString("Param %1 default value was null/NaN but NaN is not allowed");
+                        return false;
+                    }
+                    paramInfo->_defaultValue = paramObject.value(_defaultJsonKey).toDouble(0.0);
+                }
             } else {
                 paramInfo->_defaultValue = paramInfo->_nanUnchanged ? std::numeric_limits<double>::quiet_NaN() : 0;
             }
 
             QStringList enumValues = paramObject.value(_enumValuesJsonKey).toString().split(",", QString::SkipEmptyParts);
-            foreach (const QString &enumValue, enumValues) {
+            for (const QString &enumValue: enumValues) {
                 bool    convertOk;
                 double  value = enumValue.toDouble(&convertOk);
 
@@ -399,11 +407,15 @@ bool MissionCommandUIInfo::loadJsonInfo(const QJsonObject& jsonObject, bool requ
     return true;
 }
 
-const MissionCmdParamInfo* MissionCommandUIInfo::getParamInfo(int index) const
+const MissionCmdParamInfo* MissionCommandUIInfo::getParamInfo(int index, bool& showUI) const
 {
-    if (!_paramRemoveList.contains(index) && _paramInfoMap.contains(index)) {
-        return _paramInfoMap[index];
-    } else {
-        return NULL;
+    const MissionCmdParamInfo* paramInfo = NULL;
+
+    if (_paramInfoMap.contains(index)) {
+        paramInfo = _paramInfoMap[index];
     }
+
+    showUI = (paramInfo != NULL) && !_paramRemoveList.contains(index);
+
+    return paramInfo;
 }

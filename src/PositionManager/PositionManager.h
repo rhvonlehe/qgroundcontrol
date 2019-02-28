@@ -9,7 +9,8 @@
 
 #pragma once
 
-#include <QtPositioning/qgeopositioninfosource.h>
+#include <QGeoPositionInfoSource>
+#include <QNmeaPositionInfoSource>
 
 #include <QVariant>
 
@@ -24,11 +25,19 @@ public:
     QGCPositionManager(QGCApplication* app, QGCToolbox* toolbox);
     ~QGCPositionManager();
 
+    Q_PROPERTY(QGeoCoordinate gcsPosition  READ gcsPosition  NOTIFY gcsPositionChanged)
+    Q_PROPERTY(qreal          gcsHeading   READ gcsHeading   NOTIFY gcsHeadingChanged)
+
     enum QGCPositionSource {
         Simulated,
-        GPS,
-        Log
+        InternalGPS,
+        Log,
+        NmeaGPS
     };
+
+    QGeoCoordinate gcsPosition(void) { return _gcsPosition; }
+
+    qreal gcsHeading() { return _gcsHeading; }
 
     void setPositionSource(QGCPositionSource source);
 
@@ -36,16 +45,24 @@ public:
 
     void setToolbox(QGCToolbox* toolbox);
 
+    void setNmeaSourceDevice(QIODevice* device);
+
 private slots:
-    void positionUpdated(const QGeoPositionInfo &update);
+    void _positionUpdated(const QGeoPositionInfo &update);
+    void _error(QGeoPositionInfoSource::Error positioningError);
 
 signals:
-    void lastPositionUpdated(bool valid, QVariant lastPosition);
+    void gcsPositionChanged(QGeoCoordinate gcsPosition);
+    void gcsHeadingChanged(qreal gcsHeading);
     void positionInfoUpdated(QGeoPositionInfo update);
 
 private:
-    int _updateInterval;
-    QGeoPositionInfoSource * _currentSource;
-    QGeoPositionInfoSource * _defaultSource;
-    QGeoPositionInfoSource * _simulatedSource;
+    int             _updateInterval;
+    QGeoCoordinate  _gcsPosition;
+    qreal           _gcsHeading;
+
+    QGeoPositionInfoSource*     _currentSource;
+    QGeoPositionInfoSource*     _defaultSource;
+    QNmeaPositionInfoSource*    _nmeaSource;
+    QGeoPositionInfoSource*     _simulatedSource;
 };

@@ -29,16 +29,19 @@ SetupPage {
 
         Item {
             width:  Math.max(availableWidth, outerGrid.width)
-            height: outerGrid.height
+            height: _hitlAvailable ? (lastRect.y + lastRect.height) : (otherLastRect.y + otherLastRect.height)
 
             FactPanelController {
                 id:         controller
                 factPanel:  safetyPage.viewPanel
             }
 
+            readonly property string hitlParam: "SYS_HITL"
+
             property real _margins:         ScreenTools.defaultFontPixelHeight
             property real _editFieldWidth:  ScreenTools.defaultFontPixelWidth * 20
-            property real _imageWidth:      ScreenTools.defaultFontPixelWidth * 20
+            property real _imageWidth:      ScreenTools.defaultFontPixelWidth * 15
+            property real _imageHeight:     ScreenTools.defaultFontPixelHeight * 3
 
             property Fact _fenceAction:     controller.getParameterFact(-1, "GF_ACTION")
             property Fact _fenceRadius:     controller.getParameterFact(-1, "GF_MAX_HOR_DIST")
@@ -49,6 +52,8 @@ SetupPage {
             property Fact _dlLossAction:    controller.getParameterFact(-1, "NAV_DLL_ACT")
             property Fact _disarmLandDelay: controller.getParameterFact(-1, "COM_DISARM_LAND")
             property Fact _landSpeedMC:     controller.getParameterFact(-1, "MPC_LAND_SPEED", false)
+            property bool _hitlAvailable:   controller.parameterExists(-1, hitlParam)
+            property Fact _hitlEnabled:     controller.getParameterFact(-1, hitlParam, false)
 
             ExclusiveGroup { id: homeLoiterGroup }
 
@@ -93,11 +98,22 @@ SetupPage {
             }
 
             Rectangle {
+                id:     otherLastRect
                 x:      landModeGrid.x + outerGrid.x - _margins
                 y:      landModeGrid.y + outerGrid.y - _margins
                 width:  landModeGrid.width + (_margins * 2)
                 height: landModeGrid.height + (_margins * 2)
                 color:  qgcPal.windowShade
+            }
+
+            Rectangle {
+                id:         lastRect
+                x:          hitlGrid.x + outerGrid.x - _margins
+                y:          hitlGrid.y + outerGrid.y - _margins
+                width:      hitlGrid.width + (_margins * 2)
+                height:     hitlGrid.height + (_margins * 2)
+                color:      qgcPal.windowShade
+                visible:    _hitlAvailable
             }
 
             GridLayout {
@@ -119,13 +135,14 @@ SetupPage {
                     columns:    3
 
                     Image {
-                        height:             ScreenTools.defaultFontPixelWidth * 6
-                        sourceSize.height:  height
-                        mipmap:             true
-                        fillMode:           Image.PreserveAspectFit
-                        source:             "/qmlimages/check.png"///qgcPal.globalTheme === qgcPal.Light ? "/qmlimages/LowBatteryLight.svg" : "/qmlimages/LowBattery.svg"
-                        Layout.rowSpan:     3
-                        Layout.minimumWidth:    _imageWidth
+                        mipmap:                 true
+                        fillMode:               Image.PreserveAspectFit
+                        source:                 qgcPal.globalTheme === qgcPal.Light ? "/qmlimages/LowBatteryLight.svg" : "/qmlimages/LowBattery.svg"
+                        Layout.rowSpan:         4
+                        Layout.maximumWidth:    _imageWidth
+                        Layout.maximumHeight:   _imageHeight
+                        width:                  _imageWidth
+                        height:                 _imageHeight
                     }
 
                     QGCLabel {
@@ -155,6 +172,15 @@ SetupPage {
                         fact:                   controller.getParameterFact(-1, "BAT_CRIT_THR")
                         Layout.minimumWidth:    _editFieldWidth
                     }
+
+                    QGCLabel {
+                        text:               qsTr("Battery Emergency Level:")
+                        Layout.fillWidth:   true
+                    }
+                    FactTextField {
+                        fact:                   controller.getParameterFact(-1, "BAT_EMERGEN_THR")
+                        Layout.minimumWidth:    _editFieldWidth
+                    }
                 }
 
                 Item { width: 1; height: _margins; Layout.columnSpan: 3 }
@@ -173,13 +199,14 @@ SetupPage {
                     columns:    3
 
                     Image {
-                        height:             ScreenTools.defaultFontPixelWidth * 6
-                        sourceSize.height:  height
                         mipmap:             true
                         fillMode:           Image.PreserveAspectFit
-                        //source:             qgcPal.globalTheme === qgcPal.Light ? "/qmlimages/RCLossLight.svg" : "/qmlimages/RCLoss.svg"
+                        source:             qgcPal.globalTheme === qgcPal.Light ? "/qmlimages/RCLossLight.svg" : "/qmlimages/RCLoss.svg"
                         Layout.rowSpan:     3
-                        Layout.minimumWidth:    _imageWidth
+                        Layout.maximumWidth:    _imageWidth
+                        Layout.maximumHeight:   _imageHeight
+                        width:                  _imageWidth
+                        height:                 _imageHeight
                     }
 
                     QGCLabel {
@@ -218,13 +245,14 @@ SetupPage {
                     columns:    3
 
                     Image {
-                        height:             ScreenTools.defaultFontPixelWidth * 6
-                        sourceSize.height:  height
                         mipmap:             true
                         fillMode:           Image.PreserveAspectFit
-                        //source:             qgcPal.globalTheme === qgcPal.Light ? "/qmlimages/DatalinkLossLight.svg" : "/qmlimages/DatalinkLoss.svg"
+                        source:             qgcPal.globalTheme === qgcPal.Light ? "/qmlimages/DatalinkLossLight.svg" : "/qmlimages/DatalinkLoss.svg"
                         Layout.rowSpan:     3
-                        Layout.minimumWidth:    _imageWidth
+                        Layout.maximumWidth:    _imageWidth
+                        Layout.maximumHeight:   _imageHeight
+                        width:                  _imageWidth
+                        height:                 _imageHeight
                     }
 
                     QGCLabel {
@@ -263,13 +291,14 @@ SetupPage {
                     columns:    3
 
                     Image {
-                        height:             ScreenTools.defaultFontPixelWidth * 10
-                        sourceSize.height:  height
                         mipmap:             true
                         fillMode:           Image.PreserveAspectFit
-                        //source:             qgcPal.globalTheme === qgcPal.Light ? "/qmlimages/GeoFenceLight.svg" : "/qmlimages/GeoFence.svg"
+                        source:             qgcPal.globalTheme === qgcPal.Light ? "/qmlimages/GeoFenceLight.svg" : "/qmlimages/GeoFence.svg"
                         Layout.rowSpan:     3
-                        Layout.minimumWidth:    _imageWidth
+                        Layout.maximumWidth:    _imageWidth
+                        Layout.maximumHeight:   _imageHeight
+                        width:                  _imageWidth
+                        height:                 _imageHeight
                     }
 
                     QGCLabel {
@@ -284,7 +313,7 @@ SetupPage {
 
                     QGCCheckBox {
                         id:                 fenceRadiusCheckBox
-                        text:               qsTr("Max radius:")
+                        text:               qsTr("Max Radius:")
                         checked:            _fenceRadius.value > 0
                         onClicked:          _fenceRadius.value = checked ? 100 : 0
                         Layout.fillWidth:   true
@@ -297,7 +326,7 @@ SetupPage {
 
                     QGCCheckBox {
                         id:                 fenceAltMaxCheckBox
-                        text:               qsTr("Max altitude:")
+                        text:               qsTr("Max Altitude:")
                         checked:            _fenceAlt ? _fenceAlt.value > 0 : false
                         onClicked:          _fenceAlt.value = checked ? 100 : 0
                         Layout.fillWidth:   true
@@ -326,13 +355,14 @@ SetupPage {
 
                     QGCColoredImage {
                         color:                  qgcPal.text
-                        height:                 ScreenTools.defaultFontPixelWidth * 10
-                        sourceSize.height:      height
                         mipmap:                 true
                         fillMode:               Image.PreserveAspectFit
-                        //source:                 controller.vehicle.fixedWing ? "/qmlimages/ReturnToHomeAltitude.svg" : "/qmlimages/ReturnToHomeAltitudeCopter.svg"
+                        source:                 controller.vehicle.fixedWing ? "/qmlimages/ReturnToHomeAltitude.svg" : "/qmlimages/ReturnToHomeAltitudeCopter.svg"
                         Layout.rowSpan:         7
-                        Layout.minimumWidth:    _imageWidth
+                        Layout.maximumWidth:    _imageWidth
+                        Layout.maximumHeight:   _imageHeight
+                        width:                  _imageWidth
+                        height:                 _imageHeight
                     }
 
                     QGCLabel {
@@ -420,13 +450,14 @@ SetupPage {
 
                     QGCColoredImage {
                         color:                  qgcPal.text
-                        height:                 ScreenTools.defaultFontPixelWidth * 13
-                        sourceSize.height:      height
                         mipmap:                 true
                         fillMode:               Image.PreserveAspectFit
-                        //source:                 controller.vehicle.fixedWing ? "/qmlimages/LandMode.svg" : "/qmlimages/LandModeCopter.svg"
+                        source:                 controller.vehicle.fixedWing ? "/qmlimages/LandMode.svg" : "/qmlimages/LandModeCopter.svg"
                         Layout.rowSpan:         landVelocityLabel.visible ? 2 : 1
-                        Layout.minimumWidth:    _imageWidth
+                        width:                  _imageWidth
+                        height:                 _imageHeight
+                        Layout.maximumWidth:    _imageWidth
+                        Layout.maximumHeight:   _imageHeight
                     }
 
                     QGCLabel {
@@ -451,6 +482,45 @@ SetupPage {
                     FactTextField {
                         fact:                   _disarmLandDelay
                         enabled:                disarmDelayCheckBox.checked
+                        Layout.minimumWidth:    _editFieldWidth
+                    }
+                }
+
+                Item { width: 1; height: _margins; Layout.columnSpan: 3; visible: _hitlAvailable }
+
+                QGCLabel {
+                    text:               qsTr("Hardware in the Loop Simulation")
+                    Layout.columnSpan:  3
+                    visible:            _hitlAvailable
+                }
+
+                Item { width: 1; height: _margins; Layout.columnSpan: 3; visible: _hitlAvailable }
+
+                Item { width: _margins; height: 1; visible: _hitlAvailable }
+
+                GridLayout {
+                    id:         hitlGrid
+                    columns:    3
+                    visible:    _hitlAvailable
+
+                    Image {
+                        mipmap:             true
+                        fillMode:           Image.PreserveAspectFit
+                        source:             qgcPal.globalTheme === qgcPal.Light ? "/qmlimages/VehicleSummaryIcon.png" : "/qmlimages/VehicleSummaryIcon.png"
+                        Layout.rowSpan:     3
+                        Layout.maximumWidth:    _imageWidth
+                        Layout.maximumHeight:   _imageHeight
+                        width:                  _imageWidth
+                        height:                 _imageHeight
+                    }
+
+                    QGCLabel {
+                        text:               qsTr("HITL Enabled:")
+                        Layout.fillWidth:   true
+                    }
+                    FactComboBox {
+                        fact:                   _hitlEnabled
+                        indexModel:             false
                         Layout.minimumWidth:    _editFieldWidth
                     }
                 }

@@ -23,7 +23,7 @@
 #include "PowerComponent.h"
 #include "MotorComponent.h"
 #include "PX4TuningComponent.h"
-#include "MixersComponent.h"
+#include "SyslinkComponent.h"
 #include "Vehicle.h"
 
 #include <QImage>
@@ -58,7 +58,7 @@ protected:
     PowerComponent*         _powerComponent;
     MotorComponent*         _motorComponent;
     PX4TuningComponent*     _tuningComponent;
-    MixersComponent*        _mixersComponent;
+    SyslinkComponent*       _syslinkComponent;
 
 private:
     QVariantList            _components;

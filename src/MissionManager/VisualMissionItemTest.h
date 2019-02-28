@@ -20,7 +20,7 @@
 class VisualMissionItemTest : public UnitTest
 {
     Q_OBJECT
-    
+
 public:
     VisualMissionItemTest(void);
 
@@ -49,6 +49,7 @@ protected:
         specifiesAltitudeOnlyChangedIndex,
         specifiedFlightSpeedChangedIndex,
         specifiedGimbalYawChangedIndex,
+        specifiedGimbalPitchChangedIndex,
         lastSequenceNumberChangedIndex,
         missionGimbalYawChangedIndex,
         missionVehicleYawChangedIndex,
@@ -77,6 +78,7 @@ protected:
         specifiesAltitudeOnlyChangedMask =              1 << specifiesAltitudeOnlyChangedIndex,
         specifiedFlightSpeedChangedMask =               1 << specifiedFlightSpeedChangedIndex,
         specifiedGimbalYawChangedMask =                 1 << specifiedGimbalYawChangedIndex,
+        specifiedGimbalPitchChangedMask =               1 << specifiedGimbalPitchChangedIndex,
         lastSequenceNumberChangedMask =                 1 << lastSequenceNumberChangedIndex,
         missionGimbalYawChangedMask =                   1 << missionGimbalYawChangedIndex,
         missionVehicleYawChangedMask =                  1 << missionVehicleYawChangedIndex,

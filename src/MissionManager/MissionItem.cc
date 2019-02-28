@@ -52,6 +52,7 @@ MissionItem::MissionItem(QObject* parent)
 
     setAutoContinue(true);
 
+    connect(&_param1Fact, &Fact::rawValueChanged, this, &MissionItem::_param1Changed);
     connect(&_param2Fact, &Fact::rawValueChanged, this, &MissionItem::_param2Changed);
     connect(&_param3Fact, &Fact::rawValueChanged, this, &MissionItem::_param3Changed);
 }
@@ -162,22 +163,18 @@ void MissionItem::save(QJsonObject& json) const
     json[_jsonAutoContinueKey] = autoContinue();
     json[_jsonDoJumpIdKey] = _sequenceNumber;
 
-    QJsonArray rgParams =  { param1(), param2(), param3(), param4() };
+    QJsonArray rgParams =  { param1(), param2(), param3(), param4(), param5(), param6(), param7() };
     json[_jsonParamsKey] = rgParams;
-
-    QJsonValue coordinateValue;
-    JsonHelper::saveGeoCoordinate(QGeoCoordinate(param5(), param6(), param7()), true /* writeAltitude */, coordinateValue);
-    json[_jsonCoordinateKey] = coordinateValue;
 }
 
 bool MissionItem::load(QTextStream &loadStream)
 {
     const QStringList &wpParams = loadStream.readLine().split("\t");
     if (wpParams.size() == 12) {
+        setCommand((MAV_CMD)wpParams[3].toInt());   // Has to be first since it triggers defaults to be set, which are then override by below set calls
         setSequenceNumber(wpParams[0].toInt());
         setIsCurrentItem(wpParams[1].toInt() == 1 ? true : false);
         setFrame((MAV_FRAME)wpParams[2].toInt());
-        setCommand((MAV_CMD)wpParams[3].toInt());
         setParam1(wpParams[4].toDouble());
         setParam2(wpParams[5].toDouble());
         setParam3(wpParams[6].toDouble());
@@ -229,10 +226,46 @@ bool MissionItem::_convertJsonV1ToV2(const QJsonObject& json, QJsonObject& v2Jso
     return true;
 }
 
+bool MissionItem::_convertJsonV2ToV3(QJsonObject& json, QString& errorString)
+{
+    // V2 format: param 5/6/7 stored in GeoCoordinate
+    // V3 format: param 5/6/7 stored in params array
+
+    if (!json.contains(_jsonCoordinateKey)) {
+        // Already V3 format
+        return true;
+    }
+
+    QList<JsonHelper::KeyValidateInfo> keyInfoList = {
+        { _jsonCoordinateKey, QJsonValue::Array, true },
+    };
+    if (!JsonHelper::validateKeys(json, keyInfoList, errorString)) {
+        return false;
+    }
+
+    QGeoCoordinate coordinate;
+    if (!JsonHelper::loadGeoCoordinate(json[_jsonCoordinateKey], true /* altitudeRequired */, coordinate, errorString)) {
+        return false;
+    }
+
+    QJsonArray rgParam = json[_jsonParamsKey].toArray();
+    rgParam.append(coordinate.latitude());
+    rgParam.append(coordinate.longitude());
+    rgParam.append(coordinate.altitude());
+    json[_jsonParamsKey] = rgParam;
+
+    json.remove(_jsonCoordinateKey);
+
+    return true;
+}
+
 bool MissionItem::load(const QJsonObject& json, int sequenceNumber, QString& errorString)
 {
-    QJsonObject v2Json;
-    if (!_convertJsonV1ToV2(json, v2Json, errorString)) {
+    QJsonObject convertedJson;
+    if (!_convertJsonV1ToV2(json, convertedJson, errorString)) {
+        return false;
+    }
+    if (!_convertJsonV2ToV3(convertedJson, errorString)) {
         return false;
     }
 
@@ -242,48 +275,49 @@ bool MissionItem::load(const QJsonObject& json, int sequenceNumber, QString& err
         { _jsonCommandKey,                  QJsonValue::Double, true },
         { _jsonParamsKey,                   QJsonValue::Array,  true },
         { _jsonAutoContinueKey,             QJsonValue::Bool,   true },
-        { _jsonCoordinateKey,               QJsonValue::Array,  true },
         { _jsonDoJumpIdKey,                 QJsonValue::Double, false },
     };
-    if (!JsonHelper::validateKeys(v2Json, keyInfoList, errorString)) {
+    if (!JsonHelper::validateKeys(convertedJson, keyInfoList, errorString)) {
         return false;
     }
 
-    if (v2Json[VisualMissionItem::jsonTypeKey] != VisualMissionItem::jsonTypeSimpleItemValue) {
-        errorString = tr("Type found: %1 must be: %2").arg(v2Json[VisualMissionItem::jsonTypeKey].toString()).arg(VisualMissionItem::jsonTypeSimpleItemValue);
+    if (convertedJson[VisualMissionItem::jsonTypeKey] != VisualMissionItem::jsonTypeSimpleItemValue) {
+        errorString = tr("Type found: %1 must be: %2").arg(convertedJson[VisualMissionItem::jsonTypeKey].toString()).arg(VisualMissionItem::jsonTypeSimpleItemValue);
         return false;
     }
 
-    QJsonArray rgParams = v2Json[_jsonParamsKey].toArray();
-    if (rgParams.count() != 4) {
-        errorString = tr("%1 key must contains 4 values").arg(_jsonParamsKey);
+    QJsonArray rgParams = convertedJson[_jsonParamsKey].toArray();
+    if (rgParams.count() != 7) {
+        errorString = tr("%1 key must contains 7 values").arg(_jsonParamsKey);
         return false;
+    }
+
+    for (int i=0; i<4; i++) {
+        if (rgParams[i].type() != QJsonValue::Double && rgParams[i].type() != QJsonValue::Null) {
+            errorString = tr("Param %1 incorrect type %2, must be double or null").arg(i+1).arg(rgParams[i].type());
+            return false;
+        }
     }
 
     // Make sure to set these first since they can signal other changes
-    setFrame((MAV_FRAME)v2Json[_jsonFrameKey].toInt());
-    setCommand((MAV_CMD)v2Json[_jsonCommandKey].toInt());
-
-    QGeoCoordinate coordinate;
-    if (!JsonHelper::loadGeoCoordinate(v2Json[_jsonCoordinateKey], true /* altitudeRequired */, coordinate, errorString)) {
-        return false;
-    }
-    setParam5(coordinate.latitude());
-    setParam6(coordinate.longitude());
-    setParam7(coordinate.altitude());
+    setCommand((MAV_CMD)convertedJson[_jsonCommandKey].toInt());
+    setFrame((MAV_FRAME)convertedJson[_jsonFrameKey].toInt());
 
     _doJumpId = -1;
-    if (v2Json.contains(_jsonDoJumpIdKey)) {
-        _doJumpId = v2Json[_jsonDoJumpIdKey].toInt();
+    if (convertedJson.contains(_jsonDoJumpIdKey)) {
+        _doJumpId = convertedJson[_jsonDoJumpIdKey].toInt();
     }
     setIsCurrentItem(false);
     setSequenceNumber(sequenceNumber);
-    setAutoContinue(v2Json[_jsonAutoContinueKey].toBool());
+    setAutoContinue(convertedJson[_jsonAutoContinueKey].toBool());
 
-    setParam1(rgParams[0].toDouble());
-    setParam2(rgParams[1].toDouble());
-    setParam3(rgParams[2].toDouble());
-    setParam4(rgParams[3].toDouble());
+    setParam1(JsonHelper::possibleNaNJsonValue(rgParams[0]));
+    setParam2(JsonHelper::possibleNaNJsonValue(rgParams[1]));
+    setParam3(JsonHelper::possibleNaNJsonValue(rgParams[2]));
+    setParam4(JsonHelper::possibleNaNJsonValue(rgParams[3]));
+    setParam5(JsonHelper::possibleNaNJsonValue(rgParams[4]));
+    setParam6(JsonHelper::possibleNaNJsonValue(rgParams[5]));
+    setParam7(JsonHelper::possibleNaNJsonValue(rgParams[6]));
 
     return true;
 }
@@ -375,15 +409,12 @@ void MissionItem::setParam7(double param)
     }
 }
 
-void MissionItem::setCoordinate(const QGeoCoordinate& coordinate)
-{
-    setParam5(coordinate.latitude());
-    setParam6(coordinate.longitude());
-    setParam7(coordinate.altitude());
-}
-
 QGeoCoordinate MissionItem::coordinate(void) const
 {
+    if(!std::isfinite(param5()) || !std::isfinite(param6())) {
+        //-- If either of these are NAN, return an invalid (QGeoCoordinate::isValid() == false) coordinate
+        return QGeoCoordinate();
+    }
     return QGeoCoordinate(param5(), param6(), param7());
 }
 
@@ -407,6 +438,27 @@ double MissionItem::specifiedGimbalYaw(void) const
     }
 
     return gimbalYaw;
+}
+
+double MissionItem::specifiedGimbalPitch(void) const
+{
+    double gimbalPitch = std::numeric_limits<double>::quiet_NaN();
+
+    if (_commandFact.rawValue().toInt() == MAV_CMD_DO_MOUNT_CONTROL && _param7Fact.rawValue().toInt() == MAV_MOUNT_MODE_MAVLINK_TARGETING) {
+        gimbalPitch = _param1Fact.rawValue().toDouble();
+    }
+
+    return gimbalPitch;
+}
+
+void MissionItem::_param1Changed(QVariant value)
+{
+    Q_UNUSED(value);
+
+    double gimbalPitch = specifiedGimbalPitch();
+    if (!qIsNaN(gimbalPitch)) {
+        emit specifiedGimbalPitchChanged(gimbalPitch);
+    }
 }
 
 void MissionItem::_param2Changed(QVariant value)
