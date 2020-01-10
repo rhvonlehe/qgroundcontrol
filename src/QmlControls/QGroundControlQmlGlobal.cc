@@ -66,8 +66,15 @@ void QGroundControlQmlGlobal::setToolbox(QGCToolbox* toolbox)
     _settingsManager        = toolbox->settingsManager();
     _gpsRtkFactGroup        = qgcApp()->gpsRtkFactGroup();
     _airspaceManager        = toolbox->airspaceManager();
+    _adsbVehicleManager     = toolbox->adsbVehicleManager();
+#if defined(QGC_ENABLE_PAIRING)
+    _pairingManager         = toolbox->pairingManager();
+#endif
 #if defined(QGC_GST_TAISYNC_ENABLED)
     _taisyncManager         = toolbox->taisyncManager();
+#endif
+#if defined(QGC_GST_MICROHARD_ENABLED)
+    _microhardManager       = toolbox->microhardManager();
 #endif
 }
 
@@ -144,6 +151,15 @@ void QGroundControlQmlGlobal::startAPMArduSubMockLink(bool sendStatusText)
 #endif
 }
 
+void QGroundControlQmlGlobal::startAPMArduRoverMockLink(bool sendStatusText)
+{
+#ifdef QT_DEBUG
+    MockLink::startAPMArduRoverMockLink(sendStatusText);
+#else
+    Q_UNUSED(sendStatusText);
+#endif
+}
+
 void QGroundControlQmlGlobal::stopOneMockLink(void)
 {
 #ifdef QT_DEBUG
@@ -176,6 +192,18 @@ void QGroundControlQmlGlobal::setMavlinkSystemID(int id)
 int QGroundControlQmlGlobal::supportedFirmwareCount()
 {
     return _firmwarePluginManager->supportedFirmwareTypes().count();
+}
+
+int QGroundControlQmlGlobal::supportedVehicleCount()
+{
+    int count = 0;
+    QList<MAV_AUTOPILOT> list = _firmwarePluginManager->supportedFirmwareTypes();
+    foreach(auto firmware, list) {
+        if(firmware != MAV_AUTOPILOT_GENERIC) {
+            count += _firmwarePluginManager->supportedVehicleTypes(firmware).count();
+        }
+    }
+    return count;
 }
 
 bool QGroundControlQmlGlobal::px4ProFirmwareSupported()
@@ -220,4 +248,15 @@ void QGroundControlQmlGlobal::setFlightMapZoom(double zoom)
         _zoom = zoom;
         emit flightMapZoomChanged(zoom);
     }
+}
+
+QString QGroundControlQmlGlobal::qgcVersion(void) const
+{
+    QString versionStr = qgcApp()->applicationVersion();
+#ifdef __androidArm32__
+    versionStr += QStringLiteral(" %1").arg(tr("32 bit"));
+#elif __androidArm64__
+    versionStr += QStringLiteral(" %1").arg(tr("64 bit"));
+#endif
+    return versionStr;
 }

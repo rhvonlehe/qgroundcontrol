@@ -88,7 +88,7 @@ const char* FactMetaData::_qgcRebootRequiredJsonKey =   "qgcRebootRequired";
 FactMetaData::FactMetaData(QObject* parent)
     : QObject               (parent)
     , _type                 (valueTypeInt32)
-    , _decimalPlaces        (unknownDecimalPlaces)
+    , _decimalPlaces        (kUnknownDecimalPlaces)
     , _rawDefaultValue      (0)
     , _defaultValueAvailable(false)
     , _rawMax               (_maxForType())
@@ -112,7 +112,7 @@ FactMetaData::FactMetaData(QObject* parent)
 FactMetaData::FactMetaData(ValueType_t type, QObject* parent)
     : QObject               (parent)
     , _type                 (type)
-    , _decimalPlaces        (unknownDecimalPlaces)
+    , _decimalPlaces        (kUnknownDecimalPlaces)
     , _rawDefaultValue      (0)
     , _defaultValueAvailable(false)
     , _rawMax               (_maxForType())
@@ -142,7 +142,7 @@ FactMetaData::FactMetaData(const FactMetaData& other, QObject* parent)
 FactMetaData::FactMetaData(ValueType_t type, const QString name, QObject* parent)
     : QObject               (parent)
     , _type                 (type)
-    , _decimalPlaces        (unknownDecimalPlaces)
+    , _decimalPlaces        (kUnknownDecimalPlaces)
     , _rawDefaultValue      (0)
     , _defaultValueAvailable(false)
     , _rawMax               (_maxForType())
@@ -933,7 +933,7 @@ const FactMetaData::AppSettingsTranslation_s* FactMetaData::_findAppSettingsDist
             return pAppSettingsTranslation;
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 const FactMetaData::AppSettingsTranslation_s* FactMetaData::_findAppSettingsAreaUnitsTranslation(const QString& rawUnits)
@@ -953,7 +953,7 @@ const FactMetaData::AppSettingsTranslation_s* FactMetaData::_findAppSettingsArea
         }
     }
 
-    return NULL;
+    return nullptr;
 }
 
 QVariant FactMetaData::metersToAppSettingsDistanceUnits(const QVariant& meters)
@@ -1023,8 +1023,8 @@ double FactMetaData::cookedIncrement(void) const
 
 int FactMetaData::decimalPlaces(void) const
 {
-    int actualDecimalPlaces = defaultDecimalPlaces;
-    int incrementDecimalPlaces = unknownDecimalPlaces;
+    int actualDecimalPlaces = kDefaultDecimalPlaces;
+    int incrementDecimalPlaces = kUnknownDecimalPlaces;
 
     // First determine decimal places from increment
     double increment = _rawTranslator(this->rawIncrement()).toDouble();
@@ -1041,20 +1041,21 @@ int FactMetaData::decimalPlaces(void) const
         }
     }
 
-    // Correct decimal places is the larger of the two, increment or meta data value
-    if (incrementDecimalPlaces != unknownDecimalPlaces && _decimalPlaces == unknownDecimalPlaces) {
-        actualDecimalPlaces = incrementDecimalPlaces;
+    if (_decimalPlaces == kUnknownDecimalPlaces) {
+        if (incrementDecimalPlaces != kUnknownDecimalPlaces) {
+            actualDecimalPlaces = incrementDecimalPlaces;
+        } else {
+            // Adjust decimal places for cooked translation
+            int settingsDecimalPlaces = _decimalPlaces == kUnknownDecimalPlaces ? kDefaultDecimalPlaces : _decimalPlaces;
+            double ctest = _rawTranslator(1.0).toDouble();
+
+            settingsDecimalPlaces += -log10(ctest);
+
+            settingsDecimalPlaces = qMin(25, settingsDecimalPlaces);
+            settingsDecimalPlaces = qMax(0, settingsDecimalPlaces);
+        }
     } else {
-        // Adjust decimal places for cooked translation
-        int settingsDecimalPlaces = _decimalPlaces == unknownDecimalPlaces ? defaultDecimalPlaces : _decimalPlaces;
-        double ctest = _rawTranslator(1.0).toDouble();
-
-        settingsDecimalPlaces += -log10(ctest);
-
-        settingsDecimalPlaces = qMin(25, settingsDecimalPlaces);
-        settingsDecimalPlaces = qMax(0, settingsDecimalPlaces);
-
-        actualDecimalPlaces = qMax(settingsDecimalPlaces, incrementDecimalPlaces);
+        actualDecimalPlaces = _decimalPlaces;
     }
 
     return actualDecimalPlaces;
@@ -1285,27 +1286,13 @@ QMap<QString, FactMetaData*> FactMetaData::createMapFromJsonArray(const QJsonArr
 QVariant FactMetaData::cookedMax(void) const
 {
     // We have to be careful with cooked min/max. Running the raw values through the translator could flip min and max.
-    QVariant cookedMax = _rawTranslator(_rawMax);
-    QVariant cookedMin = _rawTranslator(_rawMin);
-    if (cookedMax < cookedMin) {
-        // We need to flip
-        return cookedMin;
-    } else {
-        return cookedMax;
-    }
+    return qMax(_rawTranslator(_rawMax), _rawTranslator(_rawMin));
 }
 
 QVariant FactMetaData::cookedMin(void) const
 {
     // We have to be careful with cooked min/max. Running the raw values through the translator could flip min and max.
-    QVariant cookedMax = _rawTranslator(_rawMax);
-    QVariant cookedMin = _rawTranslator(_rawMin);
-    if (cookedMax < cookedMin) {
-        // We need to flip
-        return cookedMax;
-    } else {
-        return cookedMin;
-    }
+    return qMin(_rawTranslator(_rawMax), _rawTranslator(_rawMin));
 }
 
 void FactMetaData::setVolatileValue(bool bValue)

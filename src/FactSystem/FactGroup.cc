@@ -46,25 +46,26 @@ void FactGroup::_setupTimer()
     if (_updateRateMSecs > 0) {
         connect(&_updateTimer, &QTimer::timeout, this, &FactGroup::_updateAllValues);
         _updateTimer.setSingleShot(false);
-        _updateTimer.start(_updateRateMSecs);
+        _updateTimer.setInterval(_updateRateMSecs);
+        _updateTimer.start();
     }
 }
 
 Fact* FactGroup::getFact(const QString& name)
 {
-    Fact* fact = NULL;
+    Fact* fact = nullptr;
 
     if (name.contains(".")) {
         QStringList parts = name.split(".");
         if (parts.count() != 2) {
             qWarning() << "Only single level of hierarchy supported";
-            return NULL;
+            return nullptr;
         }
 
         FactGroup * factGroup = getFactGroup(parts[0]);
         if (!factGroup) {
             qWarning() << "Unknown FactGroup" << parts[0];
-            return NULL;
+            return nullptr;
         }
 
         return factGroup->getFact(parts[1]);
@@ -82,7 +83,7 @@ Fact* FactGroup::getFact(const QString& name)
 
 FactGroup* FactGroup::getFactGroup(const QString& name)
 {
-    FactGroup* factGroup = NULL;
+    FactGroup* factGroup = nullptr;
 
     if (_nameToFactGroupMap.contains(name)) {
         factGroup = _nameToFactGroupMap[name];
@@ -123,5 +124,21 @@ void FactGroup::_updateAllValues(void)
 {
     for(Fact* fact: _nameToFactMap) {
         fact->sendDeferredValueChangedSignal();
+    }
+}
+
+void FactGroup::setLiveUpdates(bool liveUpdates)
+{
+    if (_updateTimer.interval() == 0) {
+        return;
+    }
+
+    if (liveUpdates) {
+        _updateTimer.stop();
+    } else {
+        _updateTimer.start();
+    }
+    for(Fact* fact: _nameToFactMap) {
+        fact->setSendValueChangedSignals(liveUpdates);
     }
 }

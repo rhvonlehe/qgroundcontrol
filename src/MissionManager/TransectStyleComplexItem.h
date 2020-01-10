@@ -99,7 +99,7 @@ public:
     double          specifiedGimbalYaw      (void) final { return std::numeric_limits<double>::quiet_NaN(); }
     double          specifiedGimbalPitch    (void) final { return std::numeric_limits<double>::quiet_NaN(); }
     void            setMissionFlightStatus  (MissionController::MissionFlightStatus_t& missionFlightStatus) final;
-    bool            readyForSave            (void) const override;
+    ReadyForSaveState readyForSaveState     (void) const override;
     QString         commandDescription      (void) const override { return tr("Transect"); }
     QString         commandName             (void) const override { return tr("Transect"); }
     QString         abbreviation            (void) const override { return tr("T"); }
@@ -141,7 +141,7 @@ protected:
     virtual void _recalcCameraShots         (void) = 0;
 
     void    _save                           (QJsonObject& saveObject);
-    bool    _load                           (const QJsonObject& complexObject, QString& errorString);
+    bool    _load                           (const QJsonObject& complexObject, bool forPresets, QString& errorString);
     void    _setExitCoordinate              (const QGeoCoordinate& coordinate);
     void    _setCameraShots                 (int cameraShots);
     double  _triggerDistance                (void) const;
@@ -205,6 +205,7 @@ protected:
 private slots:
     void _reallyQueryTransectsPathHeightInfo(void);
     void _followTerrainChanged              (bool followTerrain);
+    void _handleHoverAndCaptureEnabled      (QVariant enabled);
 
 private:
     void    _queryTransectsPathHeightInfo   (void);

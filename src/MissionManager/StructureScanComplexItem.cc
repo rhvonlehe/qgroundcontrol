@@ -69,6 +69,7 @@ StructureScanComplexItem::StructureScanComplexItem(Vehicle* vehicle, bool flyVie
 
     connect(&_structurePolygon, &QGCMapPolygon::dirtyChanged,   this, &StructureScanComplexItem::_polygonDirtyChanged);
     connect(&_structurePolygon, &QGCMapPolygon::pathChanged,    this, &StructureScanComplexItem::_rebuildFlightPolygon);
+    connect(&_structurePolygon, &QGCMapPolygon::isValidChanged, this, &StructureScanComplexItem::readyForSaveStateChanged);
 
     connect(&_structurePolygon, &QGCMapPolygon::countChanged,   this, &StructureScanComplexItem::_updateLastSequenceNumber);
     connect(&_layersFact,       &Fact::valueChanged,            this, &StructureScanComplexItem::_updateLastSequenceNumber);
@@ -83,6 +84,11 @@ StructureScanComplexItem::StructureScanComplexItem(Vehicle* vehicle, bool flyVie
 
     connect(&_cameraCalc, &CameraCalc::isManualCameraChanged, this, &StructureScanComplexItem::_updateGimbalPitch);
 
+    connect(&_layersFact,                           &Fact::valueChanged,            this, &StructureScanComplexItem::_recalcScanDistance);
+    connect(&_flightPolygon,                        &QGCMapPolygon::pathChanged,    this, &StructureScanComplexItem::_recalcScanDistance);
+
+    connect(this, &StructureScanComplexItem::wizardModeChanged, this, &StructureScanComplexItem::readyForSaveStateChanged);
+
     _recalcLayerInfo();
 
     if (!kmlOrShpFile.isEmpty()) {
@@ -91,14 +97,6 @@ StructureScanComplexItem::StructureScanComplexItem(Vehicle* vehicle, bool flyVie
     }
 
     setDirty(false);
-}
-
-void StructureScanComplexItem::_setScanDistance(double scanDistance)
-{
-    if (!qFuzzyCompare(_scanDistance, scanDistance)) {
-        _scanDistance = scanDistance;
-        emit complexDistanceChanged();
-    }
 }
 
 void StructureScanComplexItem::_setCameraShots(int cameraShots)
@@ -266,6 +264,11 @@ void StructureScanComplexItem::_flightPathChanged(void)
     emit coordinateChanged(coordinate());
     emit exitCoordinateChanged(exitCoordinate());
     emit greatestDistanceToChanged();
+
+    if (_isIncomplete) {
+        _isIncomplete = false;
+        emit isIncompleteChanged();
+    }
 }
 
 double StructureScanComplexItem::greatestDistanceTo(const QGeoCoordinate &other) const
@@ -284,16 +287,11 @@ double StructureScanComplexItem::greatestDistanceTo(const QGeoCoordinate &other)
     return greatestDistance;
 }
 
-bool StructureScanComplexItem::specifiesCoordinate(void) const
-{
-    return _flightPolygon.count() > 2;
-}
-
 void StructureScanComplexItem::appendMissionItems(QList<MissionItem*>& items, QObject* missionItemParent)
 {
     int     seqNum =        _sequenceNumber;
     bool    startFromTop =  _startFromTopFact.rawValue().toBool();
-    double  startAltitude = _scanBottomAltFact.rawValue().toDouble() + (startFromTop ? _structureHeightFact.rawValue().toDouble() : 0);
+    double  startAltitude = (startFromTop ? _structureHeightFact.rawValue().toDouble() : _scanBottomAltFact.rawValue().toDouble());
 
     MissionItem* item = nullptr;
 
@@ -519,6 +517,7 @@ void StructureScanComplexItem::_rebuildFlightPolygon(void)
     } else {
         _entryVertex = savedEntryVertex;
     }
+
     emit coordinateChanged(coordinate());
     emit exitCoordinateChanged(exitCoordinate());
 }
@@ -597,4 +596,32 @@ void StructureScanComplexItem::_signalTopBottomAltChanged(void)
 {
     emit topFlightAltChanged();
     emit bottomFlightAltChanged();
+}
+
+void StructureScanComplexItem::_recalcScanDistance()
+{
+    double scanDistance = 0;
+    QList<QGeoCoordinate> vertices = _flightPolygon.coordinateList();
+    for (int i=0; i<vertices.count() - 1; i++) {
+        scanDistance += vertices[i].distanceTo(vertices[i+1]);
+    }
+
+    scanDistance *= _layersFact.rawValue().toInt();
+
+    double surfaceHeight = qMax(_structureHeightFact.rawValue().toDouble() - _scanBottomAltFact.rawValue().toDouble(), 0.0);
+    scanDistance += surfaceHeight;
+
+    if (!qFuzzyCompare(_scanDistance, scanDistance)) {
+        _scanDistance = scanDistance;
+        emit complexDistanceChanged();
+    }
+
+    qCDebug(StructureScanComplexItemLog) << "StructureScanComplexItem--_recalcScanDistance layers: "
+                                  << _layersFact.rawValue().toInt() << " structure height: " << surfaceHeight
+                                  << " scanDistance: " << _scanDistance;
+}
+
+StructureScanComplexItem::ReadyForSaveState StructureScanComplexItem::readyForSaveState(void) const
+{
+    return _structurePolygon.isValid() && !_wizardMode ? ReadyForSave : NotReadyForSaveData;
 }
