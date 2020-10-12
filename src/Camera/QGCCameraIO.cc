@@ -1,7 +1,7 @@
 /*!
  * @file
  *   @brief Camera Controller
- *   @author Gus Grubba <mavlink@grubba.com>
+ *   @author Gus Grubba <gus@auterion.com>
  *
  */
 
@@ -76,7 +76,7 @@ QGCCameraParamIO::QGCCameraParamIO(QGCCameraControl *control, Fact* fact, Vehicl
             break;
         default:
             qWarning() << "Unsupported fact type" << _fact->type() << "for" << _fact->name();
-            //-- Fall Through (screw clang)
+            [[fallthrough]];
         case FactMetaData::valueTypeInt32:
             _mavParamType = MAV_PARAM_EXT_TYPE_INT32;
             break;
@@ -176,7 +176,7 @@ QGCCameraParamIO::_sendParameter()
             break;
         default:
             qCritical() << "Unsupported fact type" << factType << "for" << _fact->name();
-            //-- Fall Through (screw clang)
+            [[fallthrough]];
         case FactMetaData::valueTypeInt32:
             union_value.param_int32 = static_cast<int32_t>(_fact->rawValue().toInt());
             break;
@@ -188,10 +188,10 @@ QGCCameraParamIO::_sendParameter()
     mavlink_msg_param_ext_set_encode_chan(
         static_cast<uint8_t>(_pMavlink->getSystemId()),
         static_cast<uint8_t>(_pMavlink->getComponentId()),
-        _vehicle->priorityLink()->mavlinkChannel(),
+        _vehicle->vehicleLinkManager()->primaryLink()->mavlinkChannel(),
         &msg,
         &p);
-    _vehicle->sendMessageOnLink(_vehicle->priorityLink(), msg);
+    _vehicle->sendMessageOnLinkThreadSafe(_vehicle->vehicleLinkManager()->primaryLink(), msg);
     _paramWriteTimer.start();
 }
 
@@ -356,14 +356,15 @@ QGCCameraParamIO::paramRequest(bool reset)
     strncpy(param_id, _fact->name().toStdString().c_str(), MAVLINK_MSG_PARAM_EXT_REQUEST_READ_FIELD_PARAM_ID_LEN);
     mavlink_message_t msg;
     mavlink_msg_param_ext_request_read_pack_chan(
-        static_cast<uint8_t>(_pMavlink->getSystemId()),
-        static_cast<uint8_t>(_pMavlink->getComponentId()),
-        _vehicle->priorityLink()->mavlinkChannel(),
-        &msg,
-        static_cast<uint8_t>(_vehicle->id()),
-        static_cast<uint8_t>(_control->compID()),
-        param_id,
-        -1);
-    _vehicle->sendMessageOnLink(_vehicle->priorityLink(), msg);
+                static_cast<uint8_t>(_pMavlink->getSystemId()),
+                static_cast<uint8_t>(_pMavlink->getComponentId()),
+                _vehicle->vehicleLinkManager()->primaryLink()->mavlinkChannel(),
+                &msg,
+                static_cast<uint8_t>(_vehicle->id()),
+                static_cast<uint8_t>(_control->compID()),
+                param_id,
+                -1,
+                0);                                                 // trimmed messages = false
+    _vehicle->sendMessageOnLinkThreadSafe(_vehicle->vehicleLinkManager()->primaryLink(), msg);
     _paramRequestTimer.start();
 }

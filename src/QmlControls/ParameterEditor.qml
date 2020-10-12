@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -28,7 +28,8 @@ Item {
     property int    _rowWidth:          10 // Dynamic adjusted at runtime
     property bool   _searchFilter:      searchText.text.trim() != ""   ///< true: showing results of search
     property var    _searchResults      ///< List of parameter names from search results
-    property bool   _showRCToParam:     !ScreenTools.isMobile && QGroundControl.multiVehicleManager.activeVehicle.px4Firmware
+    property var    _activeVehicle:     QGroundControl.multiVehicleManager.activeVehicle
+    property bool   _showRCToParam:     _activeVehicle.px4Firmware
     property var    _appSettings:       QGroundControl.settingsManager.appSettings
 
     ParameterEditorController {
@@ -111,7 +112,7 @@ Item {
         }
         QGCMenuItem {
             text:           qsTr("Reset to vehicle's configuration defaults")
-            visible:        !activeVehicle.apmFirmware
+            visible:        !_activeVehicle.apmFirmware
             onTriggered:    mainWindow.showComponentDialog(resetToVehicleConfigurationConfirmComponent, qsTr("Reset All"), mainWindow.showDialogDefaultWidth, StandardButton.Cancel | StandardButton.Reset)
         }
         QGCMenuSeparator { }
@@ -133,8 +134,8 @@ Item {
         }
         QGCMenuSeparator { visible: _showRCToParam }
         QGCMenuItem {
-            text:           qsTr("Clear RC to Param")
-            onTriggered:	controller.clearRCToParam()
+            text:           qsTr("Clear all RC to Param")
+            onTriggered:	_activeVehicle.clearAllParamMapRC()
             visible:        _showRCToParam
         }
         QGCMenuSeparator { }
@@ -187,8 +188,6 @@ Item {
                         }
                     }
 
-                    ExclusiveGroup { id: buttonGroup }
-
                     Repeater {
                         model: categoryHeader.checked ? controller.getGroupsForCategory(category) : 0
 
@@ -197,7 +196,7 @@ Item {
                             text:           groupName
                             height:         _rowHeight
                             checked:        controller.currentGroup === text
-                            exclusiveGroup: buttonGroup
+                            autoExclusive:  true
 
                             readonly property string groupName: modelData
 
@@ -288,7 +287,6 @@ Item {
     QGCFileDialog {
         id:             fileDialog
         folder:         _appSettings.parameterSavePath
-        fileExtension:  _appSettings.parameterFileExtension
         nameFilters:    [ qsTr("Parameter Files (*.%1)").arg(_appSettings.parameterFileExtension) , qsTr("All Files (*.*)") ]
 
         onAcceptedForSave: {
@@ -346,8 +344,8 @@ Item {
 
         QGCViewDialog {
             function accept() {
-                activeVehicle.rebootVehicle()
                 hideDialog()
+                _activeVehicle.rebootVehicle()
             }
 
             QGCLabel {

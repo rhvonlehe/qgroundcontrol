@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -32,7 +32,7 @@ Button {
 
     background: Rectangle {
         anchors.fill: parent
-        color:  logo ? qgcPal.brandingPurple : (button.checked ? qgcPal.buttonHighlight : Qt.rgba(0,0,0,0))
+        color:  button.checked ? qgcPal.buttonHighlight : Qt.rgba(0,0,0,0)
     }
 
     contentItem: Row {
@@ -44,7 +44,7 @@ Button {
             width:                  height
             sourceSize.height:      parent.height
             fillMode:               Image.PreserveAspectFit
-            color:                  logo ? "white" : (button.checked ? qgcPal.buttonHighlightText : qgcPal.buttonText)
+            color:                  logo ? "transparent" : (button.checked ? qgcPal.buttonHighlightText : qgcPal.buttonText)
             source:                 button.icon.source
             anchors.verticalCenter: parent.verticalCenter
         }

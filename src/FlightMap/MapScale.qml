@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -121,7 +121,7 @@ Item {
             var leftCoord  = mapControl.toCoordinate(Qt.point(0, scale.y), false /* clipToViewPort */)
             var rightCoord = mapControl.toCoordinate(Qt.point(scaleLinePixelLength, scale.y), false /* clipToViewPort */)
             var scaleLineMeters = Math.round(leftCoord.distanceTo(rightCoord))
-            if (QGroundControl.settingsManager.unitsSettings.distanceUnits.value === UnitsSettings.DistanceUnitsFeet) {
+            if (QGroundControl.settingsManager.unitsSettings.horizontalDistanceUnits.value === UnitsSettings.HorizontalDistanceUnitsFeet) {
                 calculateFeetRatio(scaleLineMeters, scaleLinePixelLength)
             } else {
                 calculateMetersRatio(scaleLineMeters, scaleLinePixelLength)

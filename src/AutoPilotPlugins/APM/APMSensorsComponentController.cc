@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -150,7 +150,7 @@ void APMSensorsComponentController::_resetInternalState(void)
 
 void APMSensorsComponentController::_stopCalibration(APMSensorsComponentController::StopCalibrationCode code)
 {
-    _vehicle->setConnectionLostEnabled(true);
+    _vehicle->vehicleLinkManager()->setCommunicationLostEnabled(true);
 
     disconnect(_vehicle, &Vehicle::textMessageReceived, this, &APMSensorsComponentController::_handleUASTextMessage);
     
@@ -196,7 +196,7 @@ void APMSensorsComponentController::_stopCalibration(APMSensorsComponentControll
     default:
         // Assume failed
         _hideAllCalAreas();
-        qgcApp()->showMessage(tr("Calibration failed. Calibration log will be displayed."));
+        qgcApp()->showAppMessage(tr("Calibration failed. Calibration log will be displayed."));
         break;
     }
     
@@ -292,38 +292,47 @@ void APMSensorsComponentController::calibrateCompass(void)
 void APMSensorsComponentController::calibrateAccel(void)
 {
     _calTypeInProgress = CalTypeAccel;
-    _vehicle->setConnectionLostEnabled(false);
+    _vehicle->vehicleLinkManager()->setCommunicationLostEnabled(false);
     _startLogCalibration();
-    _uas->startCalibration(UASInterface::StartCalibrationAccel);
+    _vehicle->startCalibration(Vehicle::CalibrationAccel);
 }
 
 void APMSensorsComponentController::calibrateMotorInterference(void)
 {
     _calTypeInProgress = CalTypeCompassMot;
-    _vehicle->setConnectionLostEnabled(false);
+    _vehicle->vehicleLinkManager()->setCommunicationLostEnabled(false);
     _startLogCalibration();
     _appendStatusLog(tr("Raise the throttle slowly to between 50% ~ 75% (the props will spin!) for 5 ~ 10 seconds."));
     _appendStatusLog(tr("Quickly bring the throttle back down to zero"));
     _appendStatusLog(tr("Press the Next button to complete the calibration"));
-    _uas->startCalibration(UASInterface::StartCalibrationCompassMot);
+    _vehicle->startCalibration(Vehicle::CalibrationAPMCompassMot);
 }
 
 void APMSensorsComponentController::levelHorizon(void)
 {
     _calTypeInProgress = CalTypeLevelHorizon;
-    _vehicle->setConnectionLostEnabled(false);
+    _vehicle->vehicleLinkManager()->setCommunicationLostEnabled(false);
     _startLogCalibration();
     _appendStatusLog(tr("Hold the vehicle in its level flight position."));
-    _uas->startCalibration(UASInterface::StartCalibrationLevel);
+    _vehicle->startCalibration(Vehicle::CalibrationLevel);
 }
 
 void APMSensorsComponentController::calibratePressure(void)
 {
     _calTypeInProgress = CalTypePressure;
-    _vehicle->setConnectionLostEnabled(false);
+    _vehicle->vehicleLinkManager()->setCommunicationLostEnabled(false);
     _startLogCalibration();
     _appendStatusLog(tr("Requesting pressure calibration..."));
-    _uas->startCalibration(UASInterface::StartCalibrationPressure);
+    _vehicle->startCalibration(Vehicle::CalibrationAPMPressureAirspeed);
+}
+
+void APMSensorsComponentController::calibrateGyro(void)
+{
+    _calTypeInProgress = CalTypeGyro;
+    _vehicle->vehicleLinkManager()->setCommunicationLostEnabled(false);
+    _startLogCalibration();
+    _appendStatusLog(tr("Requesting gyro calibration..."));
+    _vehicle->startCalibration(Vehicle::CalibrationGyro);
 }
 
 void APMSensorsComponentController::_handleUASTextMessage(int uasId, int compId, int severity, QString text)
@@ -444,203 +453,6 @@ void APMSensorsComponentController::_handleUASTextMessage(int uasId, int compId,
         _stopCalibration(StopCalibrationFailed);
         return;
     }
-
-#if 0
-
-    if (text.contains(QLatin1Literal("progress <"))) {
-        QString percent = text.split("<").last().split(">").first();
-        bool ok;
-        int p = percent.toInt(&ok);
-        if (ok && _progressBar) {
-            _progressBar->setProperty("value", (float)(p / 100.0));
-        }
-        return;
-    }
-
-    QString anyKey(QStringLiteral("and press any"));
-    if (text.contains(anyKey)) {
-        text = text.left(text.indexOf(anyKey)) + QStringLiteral("and click Next to continue.");
-        _nextButton->setEnabled(true);
-    }
-
-    _appendStatusLog(text);
-    qCDebug(APMSensorsComponentControllerLog) << text << severity;
-
-    if (text.contains(QLatin1String("Calibration successful"))) {
-        _stopCalibration(StopCalibrationSuccess);
-        return;
-    }
-
-    if (text.contains(QLatin1String("FAILED"))) {
-        _stopCalibration(StopCalibrationFailed);
-        return;
-    }
-
-    // All calibration messages start with [cal]
-    QString calPrefix(QStringLiteral("[cal] "));
-    if (!text.startsWith(calPrefix)) {
-        return;
-    }
-    text = text.right(text.length() - calPrefix.length());
-
-    QString calStartPrefix(QStringLiteral("calibration started: "));
-    if (text.startsWith(calStartPrefix)) {
-        text = text.right(text.length() - calStartPrefix.length());
-        
-        _startVisualCalibration();
-        
-        if (text == QLatin1Literal("accel") || text == QLatin1Literal("mag") || text == QLatin1Literal("gyro")) {
-            // Reset all progress indication
-            _orientationCalDownSideDone = false;
-            _orientationCalUpsideDownSideDone = false;
-            _orientationCalLeftSideDone = false;
-            _orientationCalRightSideDone = false;
-            _orientationCalTailDownSideDone = false;
-            _orientationCalNoseDownSideDone = false;
-            _orientationCalDownSideInProgress = false;
-            _orientationCalUpsideDownSideInProgress = false;
-            _orientationCalLeftSideInProgress = false;
-            _orientationCalRightSideInProgress = false;
-            _orientationCalNoseDownSideInProgress = false;
-            _orientationCalTailDownSideInProgress = false;
-            
-            // Reset all visibility
-            _orientationCalDownSideVisible = false;
-            _orientationCalUpsideDownSideVisible = false;
-            _orientationCalLeftSideVisible = false;
-            _orientationCalRightSideVisible = false;
-            _orientationCalTailDownSideVisible = false;
-            _orientationCalNoseDownSideVisible = false;
-            
-            _orientationCalAreaHelpText->setProperty("text", "Place your vehicle into one of the Incomplete orientations shown below and hold it still");
-            
-            if (text == "accel") {
-                _calTypeInProgress = CalTypeAccel;
-                _orientationCalDownSideVisible = true;
-                _orientationCalUpsideDownSideVisible = true;
-                _orientationCalLeftSideVisible = true;
-                _orientationCalRightSideVisible = true;
-                _orientationCalTailDownSideVisible = true;
-                _orientationCalNoseDownSideVisible = true;
-            } else if (text == "mag") {
-                _calTypeInProgress = CalTypeOffboardCompass;
-                _orientationCalDownSideVisible = true;
-                _orientationCalUpsideDownSideVisible = true;
-                _orientationCalLeftSideVisible = true;
-                _orientationCalRightSideVisible = true;
-                _orientationCalTailDownSideVisible = true;
-                _orientationCalNoseDownSideVisible = true;
-            } else {
-                Q_ASSERT(false);
-            }
-            emit orientationCalSidesDoneChanged();
-            emit orientationCalSidesVisibleChanged();
-            emit orientationCalSidesInProgressChanged();
-            _updateAndEmitShowOrientationCalArea(true);
-        }
-        return;
-    }
-    
-    if (text.endsWith(QLatin1Literal("orientation detected"))) {
-        QString side = text.section(" ", 0, 0);
-        qDebug() << "Side started" << side;
-        
-        if (side == QLatin1Literal("down")) {
-            _orientationCalDownSideInProgress = true;
-            if (_calTypeInProgress == CalTypeOffboardCompass) {
-                _orientationCalDownSideRotate = true;
-            }
-        } else if (side == QLatin1Literal("up")) {
-            _orientationCalUpsideDownSideInProgress = true;
-            if (_calTypeInProgress == CalTypeOffboardCompass) {
-                _orientationCalUpsideDownSideRotate = true;
-            }
-        } else if (side == QLatin1Literal("left")) {
-            _orientationCalLeftSideInProgress = true;
-            if (_calTypeInProgress == CalTypeOffboardCompass) {
-                _orientationCalLeftSideRotate = true;
-            }
-        } else if (side == QLatin1Literal("right")) {
-            _orientationCalRightSideInProgress = true;
-            if (_calTypeInProgress == CalTypeOffboardCompass) {
-                _orientationCalRightSideRotate = true;
-            }
-        } else if (side == QLatin1Literal("front")) {
-            _orientationCalNoseDownSideInProgress = true;
-            if (_calTypeInProgress == CalTypeOffboardCompass) {
-                _orientationCalNoseDownSideRotate = true;
-            }
-        } else if (side == QLatin1Literal("back")) {
-            _orientationCalTailDownSideInProgress = true;
-            if (_calTypeInProgress == CalTypeOffboardCompass) {
-                _orientationCalTailDownSideRotate = true;
-            }
-        }
-        
-        if (_calTypeInProgress == CalTypeOffboardCompass) {
-            _orientationCalAreaHelpText->setProperty("text", tr("Rotate the vehicle continuously as shown in the diagram until marked as Completed"));
-        } else {
-            _orientationCalAreaHelpText->setProperty("text", tr("Hold still in the current orientation"));
-        }
-        
-        emit orientationCalSidesInProgressChanged();
-        emit orientationCalSidesRotateChanged();
-        return;
-    }
-    
-    if (text.endsWith(QLatin1Literal("side done, rotate to a different side"))) {
-        QString side = text.section(" ", 0, 0);
-        qDebug() << "Side finished" << side;
-        
-        if (side == QLatin1Literal("down")) {
-            _orientationCalDownSideInProgress = false;
-            _orientationCalDownSideDone = true;
-            _orientationCalDownSideRotate = false;
-        } else if (side == QLatin1Literal("up")) {
-            _orientationCalUpsideDownSideInProgress = false;
-            _orientationCalUpsideDownSideDone = true;
-            _orientationCalUpsideDownSideRotate = false;
-        } else if (side == QLatin1Literal("left")) {
-            _orientationCalLeftSideInProgress = false;
-            _orientationCalLeftSideDone = true;
-            _orientationCalLeftSideRotate = false;
-        } else if (side == QLatin1Literal("right")) {
-            _orientationCalRightSideInProgress = false;
-            _orientationCalRightSideDone = true;
-            _orientationCalRightSideRotate = false;
-        } else if (side == QLatin1Literal("front")) {
-            _orientationCalNoseDownSideInProgress = false;
-            _orientationCalNoseDownSideDone = true;
-            _orientationCalNoseDownSideRotate = false;
-        } else if (side == QLatin1Literal("back")) {
-            _orientationCalTailDownSideInProgress = false;
-            _orientationCalTailDownSideDone = true;
-            _orientationCalTailDownSideRotate = false;
-        }
-        
-        _orientationCalAreaHelpText->setProperty("text", tr("Place you vehicle into one of the orientations shown below and hold it still"));
-
-        emit orientationCalSidesInProgressChanged();
-        emit orientationCalSidesDoneChanged();
-        emit orientationCalSidesRotateChanged();
-        return;
-    }
-    
-    if (text.startsWith(QLatin1Literal("calibration done:"))) {
-        _stopCalibration(StopCalibrationSuccess);
-        return;
-    }
-
-    if (text.startsWith(QLatin1Literal("calibration cancelled"))) {
-        _stopCalibration(_waitingForCancel ? StopCalibrationCancelled : StopCalibrationFailed);
-        return;
-    }
-
-    if (text.startsWith(QLatin1Literal("calibration failed"))) {
-        _stopCalibration(StopCalibrationFailed);
-        return;
-    }
-#endif
 }
 
 void APMSensorsComponentController::_refreshParams(void)
@@ -685,7 +497,7 @@ void APMSensorsComponentController::cancelCalibration(void)
         emit waitingForCancelChanged();
         // The firmware doesn't always allow us to cancel calibration. The best we can do is wait
         // for it to timeout.
-        _uas->stopCalibration();
+        _vehicle->stopCalibration();
     }
 
 }
@@ -695,7 +507,7 @@ void APMSensorsComponentController::nextClicked(void)
     mavlink_message_t       msg;
     mavlink_msg_command_ack_pack_chan(qgcApp()->toolbox()->mavlinkProtocol()->getSystemId(),
                                       qgcApp()->toolbox()->mavlinkProtocol()->getComponentId(),
-                                      _vehicle->priorityLink()->mavlinkChannel(),
+                                      _vehicle->vehicleLinkManager()->primaryLink()->mavlinkChannel(),
                                       &msg,
                                       0,    // command
                                       1,    // result
@@ -704,7 +516,7 @@ void APMSensorsComponentController::nextClicked(void)
                                       0,    // target_system
                                       0);   // target_component
 
-    _vehicle->sendMessageOnLink(_vehicle->priorityLink(), msg);
+    _vehicle->sendMessageOnLinkThreadSafe(_vehicle->vehicleLinkManager()->primaryLink(), msg);
 
     if (_calTypeInProgress == CalTypeCompassMot) {
         _stopCalibration(StopCalibrationSuccess);
@@ -723,41 +535,23 @@ bool APMSensorsComponentController::accelSetupNeeded(void) const
 
 bool APMSensorsComponentController::usingUDPLink(void)
 {
-    return _vehicle->priorityLink()->getLinkConfiguration()->type() == LinkConfiguration::TypeUdp;
+    return _vehicle->vehicleLinkManager()->primaryLink()->linkConfiguration()->type() == LinkConfiguration::TypeUdp;
 }
 
 void APMSensorsComponentController::_handleCommandAck(mavlink_message_t& message)
 {
-    if (_calTypeInProgress == CalTypeLevelHorizon) {
+    if (_calTypeInProgress == CalTypeLevelHorizon || _calTypeInProgress == CalTypeGyro || _calTypeInProgress == CalTypePressure) {
         mavlink_command_ack_t commandAck;
         mavlink_msg_command_ack_decode(&message, &commandAck);
 
         if (commandAck.command == MAV_CMD_PREFLIGHT_CALIBRATION) {
             switch (commandAck.result) {
             case MAV_RESULT_ACCEPTED:
-                _appendStatusLog(tr("Level horizon complete"));
+                _appendStatusLog(tr("Successfully completed"));
                 _stopCalibration(StopCalibrationSuccessShowLog);
                 break;
             default:
-                _appendStatusLog(tr("Level horizon failed"));
-                _stopCalibration(StopCalibrationFailed);
-                break;
-            }
-        }
-    }
-
-    if (_calTypeInProgress == CalTypePressure) {
-        mavlink_command_ack_t commandAck;
-        mavlink_msg_command_ack_decode(&message, &commandAck);
-
-        if (commandAck.command == MAV_CMD_PREFLIGHT_CALIBRATION) {
-            switch (commandAck.result) {
-            case MAV_RESULT_ACCEPTED:
-                _appendStatusLog(tr("Pressure calibration success"));
-                _stopCalibration(StopCalibrationSuccessShowLog);
-                break;
-            default:
-                _appendStatusLog(tr("Pressure calibration fail"));
+                _appendStatusLog(tr("Failed"));
                 _stopCalibration(StopCalibrationFailed);
                 break;
             }

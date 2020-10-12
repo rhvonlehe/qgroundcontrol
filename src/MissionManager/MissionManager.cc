@@ -1,15 +1,11 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
  *
  ****************************************************************************/
-
-
-/// @file
-///     @author Don Gagne <don@thegagnes.com>
 
 #include "MissionManager.h"
 #include "Vehicle.h"
@@ -62,14 +58,14 @@ void MissionManager::writeArduPilotGuidedMissionItem(const QGeoCoordinate& gotoC
     missionItem.current =           altChangeOnly ? 3 : 2;
     missionItem.autocontinue =      true;
 
-    _dedicatedLink = _vehicle->priorityLink();
+    _dedicatedLink = _vehicle->vehicleLinkManager()->primaryLink();
     mavlink_msg_mission_item_encode_chan(qgcApp()->toolbox()->mavlinkProtocol()->getSystemId(),
                                          qgcApp()->toolbox()->mavlinkProtocol()->getComponentId(),
                                          _dedicatedLink->mavlinkChannel(),
                                          &messageOut,
                                          &missionItem);
 
-    _vehicle->sendMessageOnLink(_dedicatedLink, messageOut);
+    _vehicle->sendMessageOnLinkThreadSafe(_dedicatedLink, messageOut);
     _startAckTimeout(AckGuidedItem);
     emit inProgressChanged(true);
 }
@@ -88,7 +84,7 @@ void MissionManager::generateResumeMission(int resumeIndex)
     for (int i=0; i<_missionItems.count(); i++) {
         MissionItem* item = _missionItems[i];
         if (item->command() == MAV_CMD_DO_JUMP) {
-            qgcApp()->showMessage(tr("Unable to generate resume mission due to MAV_CMD_DO_JUMP command."));
+            qgcApp()->showAppMessage(tr("Unable to generate resume mission due to MAV_CMD_DO_JUMP command."));
             return;
         }
     }
@@ -97,11 +93,11 @@ void MissionManager::generateResumeMission(int resumeIndex)
     resumeIndex = qMax(0, qMin(resumeIndex, _missionItems.count() - 1));
 
     // Adjust resume index to be a location based command
-    const MissionCommandUIInfo* uiInfo = qgcApp()->toolbox()->missionCommandTree()->getUIInfo(_vehicle, _missionItems[resumeIndex]->command());
+    const MissionCommandUIInfo* uiInfo = qgcApp()->toolbox()->missionCommandTree()->getUIInfo(_vehicle, QGCMAVLink::VehicleClassGeneric, _missionItems[resumeIndex]->command());
     if (!uiInfo || uiInfo->isStandaloneCoordinate() || !uiInfo->specifiesCoordinate()) {
         // We have to back up to the last command which the vehicle flies through
         while (--resumeIndex > 0) {
-            uiInfo = qgcApp()->toolbox()->missionCommandTree()->getUIInfo(_vehicle, _missionItems[resumeIndex]->command());
+            uiInfo = qgcApp()->toolbox()->missionCommandTree()->getUIInfo(_vehicle, QGCMAVLink::VehicleClassGeneric, _missionItems[resumeIndex]->command());
             if (uiInfo && (uiInfo->specifiesCoordinate() && !uiInfo->isStandaloneCoordinate())) {
                 // Found it
                 break;

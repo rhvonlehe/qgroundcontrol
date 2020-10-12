@@ -1,6 +1,6 @@
 /****************************************************************************
  *
- *   (c) 2009-2016 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
+ * (c) 2009-2020 QGROUNDCONTROL PROJECT <http://www.qgroundcontrol.org>
  *
  * QGroundControl is licensed according to the terms in the file
  * COPYING.md in the root of the source code directory.
@@ -86,13 +86,6 @@ QStringList ParameterEditorController::searchParameters(const QString& searchTex
     return list;
 }
 
-void ParameterEditorController::clearRCToParam(void)
-{
-    if (_uas) {
-        _uas->unsetRCToParameterMap();
-    }
-}
-
 void ParameterEditorController::saveToFile(const QString& filename)
 {
     if (!filename.isEmpty()) {
@@ -104,7 +97,7 @@ void ParameterEditorController::saveToFile(const QString& filename)
         QFile file(parameterFilename);
 
         if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            qgcApp()->showMessage(tr("Unable to create file: %1").arg(parameterFilename));
+            qgcApp()->showAppMessage(tr("Unable to create file: %1").arg(parameterFilename));
             return;
         }
 
@@ -122,7 +115,7 @@ void ParameterEditorController::loadFromFile(const QString& filename)
         QFile file(filename);
 
         if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            qgcApp()->showMessage(tr("Unable to open file: %1").arg(filename));
+            qgcApp()->showAppMessage(tr("Unable to open file: %1").arg(filename));
             return;
         }
 
@@ -175,7 +168,12 @@ bool ParameterEditorController::_shouldShow(Fact* fact)
 void ParameterEditorController::_updateParameters(void)
 {
     QObjectList newParameterList;
+
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
     QStringList searchItems = _searchText.split(' ', QString::SkipEmptyParts);
+#else
+    QStringList searchItems = _searchText.split(' ', Qt::SkipEmptyParts);
+#endif
 
     if (searchItems.isEmpty() && !_showModifiedOnly) {
         int compId = _parameterMgr->getComponentId(_currentCategory);
