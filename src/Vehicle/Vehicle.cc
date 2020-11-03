@@ -600,7 +600,8 @@ void Vehicle::_mavlinkMessageReceived(LinkInterface* link, mavlink_message_t mes
     if (!_terrainProtocolHandler->mavlinkMessageReceived(message)) {
         return;
     }
-    _ftpManager->mavlinkMessageReceived(message);
+    _ftpManager->_mavlinkMessageReceived(message);
+    _parameterManager->mavlinkMessageReceived(message);
 
     _waitForMavlinkMessageMessageReceived(message);
 
@@ -2616,7 +2617,7 @@ void Vehicle::_sendMavCommandWorker(bool commandInt, bool requestMessage, bool s
             emit mavCommandResult(_id, targetCompId, command, MAV_RESULT_FAILED, failureCode);
         }
         if (showError) {
-            qgcApp()->showAppMessage(tr("Unabled to send command: %1. %2").arg(compIdAll ? tr("Internal error") : tr("Waiting on previous response to same command.")));
+            qgcApp()->showAppMessage(tr("Unable to send command: %1.").arg(compIdAll ? tr("Internal error - MAV_COMP_ID_ALL not supported") : tr("Waiting on previous response to same command.")));
         }
 
         return;
@@ -2691,8 +2692,8 @@ void Vehicle::_sendMavCommandFromList(MavCommandListEntry_t& commandEntry)
         cmd.param2 =            commandEntry.rgParam[1];
         cmd.param3 =            commandEntry.rgParam[2];
         cmd.param4 =            commandEntry.rgParam[3];
-        cmd.x =                 commandEntry.rgParam[4] * qPow(10.0, 7.0);
-        cmd.y =                 commandEntry.rgParam[5] * qPow(10.0, 7.0);
+        cmd.x =                 commandEntry.frame == MAV_FRAME_MISSION ? commandEntry.rgParam[4] : commandEntry.rgParam[4] * 1e7;
+        cmd.y =                 commandEntry.frame == MAV_FRAME_MISSION ? commandEntry.rgParam[5] : commandEntry.rgParam[5] * 1e7;
         cmd.z =                 commandEntry.rgParam[6];
         mavlink_msg_command_int_encode_chan(_mavlink->getSystemId(),
                                             _mavlink->getComponentId(),
@@ -3728,7 +3729,8 @@ void Vehicle::clearAllParamMapRC(void)
 
 void Vehicle::sendJoystickDataThreadSafe(float roll, float pitch, float yaw, float thrust, quint16 buttons)
 {
-    if (_vehicleLinkManager->primaryLink()->linkConfiguration()->isHighLatency()) {
+    LinkInterface* pPrimaryLink = vehicleLinkManager()->primaryLink();
+    if (pPrimaryLink == nullptr || pPrimaryLink->linkConfiguration()->isHighLatency()) {
         return;
     }
 
@@ -3744,7 +3746,7 @@ void Vehicle::sendJoystickDataThreadSafe(float roll, float pitch, float yaw, flo
     mavlink_msg_manual_control_pack_chan(
                 static_cast<uint8_t>(_mavlink->getSystemId()),
                 static_cast<uint8_t>(_mavlink->getComponentId()),
-                vehicleLinkManager()->primaryLink()->mavlinkChannel(),
+                pPrimaryLink->mavlinkChannel(),
                 &message,
                 static_cast<uint8_t>(_id),
                 static_cast<int16_t>(newPitchCommand),
@@ -3752,5 +3754,5 @@ void Vehicle::sendJoystickDataThreadSafe(float roll, float pitch, float yaw, flo
                 static_cast<int16_t>(newThrustCommand),
                 static_cast<int16_t>(newYawCommand),
                 buttons);
-    sendMessageOnLinkThreadSafe(vehicleLinkManager()->primaryLink(), message);
+    sendMessageOnLinkThreadSafe(pPrimaryLink, message);
 }

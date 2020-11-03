@@ -436,7 +436,9 @@ void MockLink::_sendBatteryStatus(void)
                 _battery1PctRemaining,
                 _battery1TimeRemaining,
                 _battery1ChargeState,
-                rgVoltagesExtNone);
+                rgVoltagesExtNone,
+                0, // MAV_BATTERY_MODE
+                0); // MAV_BATTERY_FAULT
     respondWithMavlinkMessage(msg);
 
     mavlink_msg_battery_status_pack_chan(
@@ -455,7 +457,10 @@ void MockLink::_sendBatteryStatus(void)
                 _battery2PctRemaining,
                 _battery2TimeRemaining,
                 _battery2ChargeState,
-                rgVoltagesExtNone);
+                rgVoltagesExtNone,
+                0, // MAV_BATTERY_MODE
+                0); // MAV_BATTERY_FAULT
+
     respondWithMavlinkMessage(msg);
 }
 
@@ -1567,13 +1572,15 @@ bool MockLink::_handleRequestMessage(const mavlink_command_long_t& request, bool
 
     switch ((int)request.param1) {
     case MAVLINK_MSG_ID_COMPONENT_INFORMATION:
-        switch (static_cast<int>(request.param2)) {
-        case COMP_METADATA_TYPE_VERSION:
-            _sendVersionMetaData();
-            return true;
-        case COMP_METADATA_TYPE_PARAMETER:
-            _sendParameterMetaData();
-            return true;
+        if (_firmwareType == MAV_AUTOPILOT_PX4) {
+            switch (static_cast<int>(request.param2)) {
+            case COMP_METADATA_TYPE_VERSION:
+                _sendVersionMetaData();
+                return true;
+            case COMP_METADATA_TYPE_PARAMETER:
+                _sendParameterMetaData();
+                return true;
+            }
         }
         break;
     case MAVLINK_MSG_ID_DEBUG:

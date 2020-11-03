@@ -423,6 +423,7 @@ Set to 2 to use heading from motion capture</short_desc>
       <long_desc>This parameter controls the source of battery data. The value 'Power Module' means that measurements are expected to come from a power module. If the value is set to 'External' then the system expects to receive mavlink battery status messages. If the value is set to 'ESCs', the battery information are taken from the esc_status message. This requires the ESC to provide both voltage as well as current.</long_desc>
       <reboot_required>True</reboot_required>
       <values>
+        <value code="-1">Disabled</value>
         <value code="0">Power Module</value>
         <value code="1">External</value>
         <value code="2">ESCs</value>
@@ -518,11 +519,12 @@ Set to 2 to use heading from motion capture</short_desc>
       <increment>0.01</increment>
       <reboot_required>True</reboot_required>
     </parameter>
-    <parameter name="BAT2_SOURCE" default="0" type="INT32">
+    <parameter name="BAT2_SOURCE" default="-1" type="INT32">
       <short_desc>Battery 2 monitoring source</short_desc>
       <long_desc>This parameter controls the source of battery data. The value 'Power Module' means that measurements are expected to come from a power module. If the value is set to 'External' then the system expects to receive mavlink battery status messages. If the value is set to 'ESCs', the battery information are taken from the esc_status message. This requires the ESC to provide both voltage as well as current.</long_desc>
       <reboot_required>True</reboot_required>
       <values>
+        <value code="-1">Disabled</value>
         <value code="0">Power Module</value>
         <value code="1">External</value>
         <value code="2">ESCs</value>
@@ -1856,13 +1858,6 @@ If no airspeed measurements are avalable, the EKF-GSF AHRS calculation will assu
         <value code="3">Vision</value>
       </values>
     </parameter>
-    <parameter name="EKF2_IMU_ID" default="0" type="INT32" category="Developer">
-      <short_desc>Device id of IMU</short_desc>
-      <long_desc>Set to 0 to use system selected (sensor_combined) IMU, otherwise set to the device id of the desired IMU (vehicle_imu).</long_desc>
-      <values>
-        <value code="0">System Primary</value>
-      </values>
-    </parameter>
     <parameter name="EKF2_IMU_POS_X" default="0.0" type="FLOAT">
       <short_desc>X position of IMU in body frame (forward axis with origin relative to vehicle centre of gravity)</short_desc>
       <unit>m</unit>
@@ -1887,7 +1882,7 @@ If no airspeed measurements are avalable, the EKF-GSF AHRS calculation will assu
 This is the amount of X-axis magnetometer bias learned by the EKF and saved from the last flight. It must be set to zero if the ground based magnetometer calibration is repeated</short_desc>
       <min>-0.5</min>
       <max>0.5</max>
-      <unit>mgauss</unit>
+      <unit>gauss</unit>
       <decimal>3</decimal>
       <reboot_required>true</reboot_required>
     </parameter>
@@ -1896,7 +1891,7 @@ This is the amount of X-axis magnetometer bias learned by the EKF and saved from
 This is the amount of Y-axis magnetometer bias learned by the EKF and saved from the last flight. It must be set to zero if the ground based magnetometer calibration is repeated</short_desc>
       <min>-0.5</min>
       <max>0.5</max>
-      <unit>mgauss</unit>
+      <unit>gauss</unit>
       <decimal>3</decimal>
       <reboot_required>true</reboot_required>
     </parameter>
@@ -1905,7 +1900,7 @@ This is the amount of Y-axis magnetometer bias learned by the EKF and saved from
 This is the amount of Z-axis magnetometer bias learned by the EKF and saved from the last flight. It must be set to zero if the ground based magnetometer calibration is repeated</short_desc>
       <min>-0.5</min>
       <max>0.5</max>
-      <unit>mgauss</unit>
+      <unit>gauss</unit>
       <decimal>3</decimal>
       <reboot_required>true</reboot_required>
     </parameter>
@@ -1919,7 +1914,7 @@ Smaller values make the saved mag bias learn slower from flight to flight. Large
     <parameter name="EKF2_MAGB_VREF" default="2.5E-7" type="FLOAT">
       <short_desc>State variance assumed for magnetometer bias storage.
 This is a reference variance used to calculate the fraction of learned magnetometer bias that will be used to update the stored value. Smaller values will make the stored bias data adjust more slowly from flight to flight. Larger values will make it adjust faster</short_desc>
-      <unit>mgauss^2</unit>
+      <unit>gauss^2</unit>
       <decimal>8</decimal>
       <reboot_required>true</reboot_required>
     </parameter>
@@ -2019,6 +2014,20 @@ Baro and Magnetometer data will be averaged before downsampling, other data will
       <max>10.0</max>
       <decimal>1</decimal>
     </parameter>
+    <parameter name="EKF2_MULTI_IMU" default="0" type="INT32">
+      <short_desc>Multi-EKF IMUs</short_desc>
+      <long_desc>Maximum number of IMUs to use for Multi-EKF. Set 0 to disable. Requires SENS_IMU_MODE 0.</long_desc>
+      <min>0</min>
+      <max>4</max>
+      <reboot_required>true</reboot_required>
+    </parameter>
+    <parameter name="EKF2_MULTI_MAG" default="0" type="INT32">
+      <short_desc>Multi-EKF Magnetometers</short_desc>
+      <long_desc>Maximum number of magnetometers to use for Multi-EKF. Set 0 to disable. Requires SENS_MAG_MODE 0.</long_desc>
+      <min>0</min>
+      <max>4</max>
+      <reboot_required>true</reboot_required>
+    </parameter>
     <parameter name="EKF2_NOAID_NOISE" default="10.0" type="FLOAT">
       <short_desc>Measurement noise for non-aiding position hold</short_desc>
       <min>0.5</min>
@@ -2032,7 +2041,7 @@ Baro and Magnetometer data will be averaged before downsampling, other data will
       <max>10000000</max>
       <unit>us</unit>
     </parameter>
-    <parameter name="EKF2_OF_DELAY" default="5" type="FLOAT">
+    <parameter name="EKF2_OF_DELAY" default="20" type="FLOAT">
       <short_desc>Optical flow measurement delay relative to IMU measurements
 Assumes measurement is timestamped at trailing edge of integration period</short_desc>
       <min>0</min>
@@ -2252,6 +2261,30 @@ This is the ratio of static pressure error to dynamic pressure generated by a wi
       <min>0.0</min>
       <max>0.2</max>
       <unit>m/m</unit>
+    </parameter>
+    <parameter name="EKF2_SEL_ERR_RED" default="0.2" type="FLOAT">
+      <short_desc>Selector error reduce threshold</short_desc>
+      <long_desc>EKF2 instances have to be better than the selected by at least this amount before their relative score can be reduced.</long_desc>
+    </parameter>
+    <parameter name="EKF2_SEL_IMU_ACC" default="1.0" type="FLOAT">
+      <short_desc>Selector acceleration threshold</short_desc>
+      <long_desc>EKF2 selector acceleration error threshold for comparing accelerometers. Acceleration vector differences larger than this will result in accumulated velocity error.</long_desc>
+      <unit>m/s^2</unit>
+    </parameter>
+    <parameter name="EKF2_SEL_IMU_ANG" default="15.0" type="FLOAT">
+      <short_desc>Selector angular threshold</short_desc>
+      <long_desc>EKF2 selector maximum accumulated angular error threshold for comparing gyros. Accumulated angular error larger than this will result in the sensor being declared faulty.</long_desc>
+      <unit>deg</unit>
+    </parameter>
+    <parameter name="EKF2_SEL_IMU_RAT" default="7.0" type="FLOAT">
+      <short_desc>Selector angular rate threshold</short_desc>
+      <long_desc>EKF2 selector angular rate error threshold for comparing gyros. Angular rate vector differences larger than this will result in accumulated angular error.</long_desc>
+      <unit>deg/s</unit>
+    </parameter>
+    <parameter name="EKF2_SEL_IMU_VEL" default="2.0" type="FLOAT">
+      <short_desc>Selector angular threshold</short_desc>
+      <long_desc>EKF2 selector maximum accumulated velocity threshold for comparing accelerometers. Accumulated velocity error larger than this will result in the sensor being declared faulty.</long_desc>
+      <unit>m/s</unit>
     </parameter>
     <parameter name="EKF2_TAS_GATE" default="3.0" type="FLOAT">
       <short_desc>Gate size for TAS fusion</short_desc>
@@ -2853,6 +2886,16 @@ Set to 0 to disable heading hold</short_desc>
       <short_desc>Use terrain estimate during landing</short_desc>
       <long_desc>This is turned off by default and a waypoint or return altitude is normally used (or sea level for an arbitrary land position).</long_desc>
     </parameter>
+    <parameter name="FW_POSCTL_INV_ST" default="0" type="INT32">
+      <short_desc>RC stick mapping fixed-wing</short_desc>
+      <long_desc>Set RC/joystick configuration for fixed-wing position and altitude controlled flight.</long_desc>
+      <min>0</min>
+      <max>1</max>
+      <values>
+        <value code="0">Normal stick configuration (airspeed on throttle stick, altitude on pitch stick)</value>
+        <value code="1">Alternative stick configuration (altitude on throttle stick, airspeed on pitch stick)</value>
+      </values>
+    </parameter>
     <parameter name="FW_P_LIM_MAX" default="45.0" type="FLOAT">
       <short_desc>Positive pitch limit</short_desc>
       <long_desc>The maximum positive pitch the controller will output.</long_desc>
@@ -3403,7 +3446,7 @@ but also ignore less noise</short_desc>
       <unit>normalized_thrust</unit>
       <decimal>3</decimal>
     </parameter>
-    <parameter name="HTE_HT_NOISE" default="0.0005" type="FLOAT">
+    <parameter name="HTE_HT_NOISE" default="0.0036" type="FLOAT">
       <short_desc>Hover thrust process noise</short_desc>
       <long_desc>Reduce to make the hover thrust estimate more stable, increase if the real hover thrust is expected to change quickly over time.</long_desc>
       <min>0.0001</min>
@@ -9320,6 +9363,24 @@ is less than 50% of this value</short_desc>
       <unit>Hz</unit>
       <reboot_required>true</reboot_required>
     </parameter>
+    <parameter name="IMU_GYRO_FFT_EN" default="0" type="INT32">
+      <short_desc>IMU gyro FFT enable</short_desc>
+      <reboot_required>true</reboot_required>
+    </parameter>
+    <parameter name="IMU_GYRO_FFT_MAX" default="200.0" type="FLOAT">
+      <short_desc>IMU gyro FFT maximum frequency</short_desc>
+      <min>1</min>
+      <max>1000</max>
+      <unit>Hz</unit>
+      <reboot_required>true</reboot_required>
+    </parameter>
+    <parameter name="IMU_GYRO_FFT_MIN" default="50.0" type="FLOAT">
+      <short_desc>IMU gyro FFT minimum frequency</short_desc>
+      <min>1</min>
+      <max>1000</max>
+      <unit>Hz</unit>
+      <reboot_required>true</reboot_required>
+    </parameter>
     <parameter name="IMU_GYRO_NF_BW" default="20.0" type="FLOAT">
       <short_desc>Notch filter bandwidth for gyro</short_desc>
       <long_desc>The frequency width of the stop band for the 2nd order notch filter on the primary gyro. See "IMU_GYRO_NF_FREQ" to activate the filter and to set the notch frequency. Applies to both angular velocity and angular acceleration sent to the controllers.</long_desc>
@@ -9568,7 +9629,7 @@ How often the sensor is readout</short_desc>
       <reboot_required>true</reboot_required>
     </parameter>
     <parameter name="SENS_EN_SF0X" default="1" type="INT32">
-      <short_desc>Lightware Laser Rangefinder hardware model</short_desc>
+      <short_desc>Lightware Laser Rangefinder hardware model (serial)</short_desc>
       <reboot_required>true</reboot_required>
       <values>
         <value code="1">SF02</value>
@@ -10124,8 +10185,8 @@ How often the sensor is readout</short_desc>
       </values>
     </parameter>
     <parameter name="SENS_SF0X_CFG" default="0" type="INT32">
-      <short_desc>Serial Configuration for Lightware Laser Rangefinder</short_desc>
-      <long_desc>Configure on which serial port to run Lightware Laser Rangefinder.</long_desc>
+      <short_desc>Serial Configuration for Lightware Laser Rangefinder (serial)</short_desc>
+      <long_desc>Configure on which serial port to run Lightware Laser Rangefinder (serial).</long_desc>
       <reboot_required>true</reboot_required>
       <values>
         <value code="0">Disabled</value>
@@ -10747,6 +10808,10 @@ How often the sensor is readout</short_desc>
       <short_desc>Minimum starting temperature for thermal calibration</short_desc>
       <long_desc>Temperature calibration for each sensor will ignore data if the temperature is lower than the value set by SYS_CAL_TMIN.</long_desc>
       <unit>celcius</unit>
+    </parameter>
+    <parameter name="SYS_FAC_CAL_MODE" default="0" type="INT32">
+      <short_desc>Enable factory calibration mode</short_desc>
+      <long_desc>If enabled, future sensor calibrations will be stored to /fs/mtd_caldata. Note: this is only supported on boards with a separate calibration storage /fs/mtd_caldata.</long_desc>
     </parameter>
     <parameter name="SYS_FAILURE_EN" default="0" type="INT32">
       <short_desc>Enable failure injection</short_desc>
@@ -11460,6 +11525,58 @@ How often the sensor is readout</short_desc>
     <parameter name="UAVCAN_ESC_IDLT" default="1" type="INT32">
       <short_desc>UAVCAN ESC will spin at idle throttle when armed, even if the mixer outputs zero setpoints</short_desc>
       <reboot_required>true</reboot_required>
+    </parameter>
+    <parameter name="UAVCAN_LGT_ANTCL" default="2" type="INT32">
+      <short_desc>UAVCAN ANTI_COLLISION light operating mode</short_desc>
+      <long_desc>This parameter defines the minimum condition under which the system will command the ANTI_COLLISION lights on 0 - Always off 1 - When autopilot is armed 2 - When autopilot is prearmed 3 - Always on</long_desc>
+      <min>0</min>
+      <max>3</max>
+      <reboot_required>true</reboot_required>
+      <values>
+        <value code="0">Always off</value>
+        <value code="1">When autopilot is armed</value>
+        <value code="2">When autopilot is prearmed</value>
+        <value code="3">Always on</value>
+      </values>
+    </parameter>
+    <parameter name="UAVCAN_LGT_LAND" default="0" type="INT32">
+      <short_desc>UAVCAN LIGHT_ID_LANDING light operating mode</short_desc>
+      <long_desc>This parameter defines the minimum condition under which the system will command the LIGHT_ID_LANDING lights on 0 - Always off 1 - When autopilot is armed 2 - When autopilot is prearmed 3 - Always on</long_desc>
+      <min>0</min>
+      <max>3</max>
+      <reboot_required>true</reboot_required>
+      <values>
+        <value code="0">Always off</value>
+        <value code="1">When autopilot is armed</value>
+        <value code="2">When autopilot is prearmed</value>
+        <value code="3">Always on</value>
+      </values>
+    </parameter>
+    <parameter name="UAVCAN_LGT_NAV" default="3" type="INT32">
+      <short_desc>UAVCAN RIGHT_OF_WAY light operating mode</short_desc>
+      <long_desc>This parameter defines the minimum condition under which the system will command the RIGHT_OF_WAY lights on 0 - Always off 1 - When autopilot is armed 2 - When autopilot is prearmed 3 - Always on</long_desc>
+      <min>0</min>
+      <max>3</max>
+      <reboot_required>true</reboot_required>
+      <values>
+        <value code="0">Always off</value>
+        <value code="1">When autopilot is armed</value>
+        <value code="2">When autopilot is prearmed</value>
+        <value code="3">Always on</value>
+      </values>
+    </parameter>
+    <parameter name="UAVCAN_LGT_STROB" default="1" type="INT32">
+      <short_desc>UAVCAN STROBE light operating mode</short_desc>
+      <long_desc>This parameter defines the minimum condition under which the system will command the STROBE lights on 0 - Always off 1 - When autopilot is armed 2 - When autopilot is prearmed 3 - Always on</long_desc>
+      <min>0</min>
+      <max>3</max>
+      <reboot_required>true</reboot_required>
+      <values>
+        <value code="0">Always off</value>
+        <value code="1">When autopilot is armed</value>
+        <value code="2">When autopilot is prearmed</value>
+        <value code="3">Always on</value>
+      </values>
     </parameter>
     <parameter name="UAVCAN_NODE_ID" default="1" type="INT32">
       <short_desc>UAVCAN Node ID</short_desc>

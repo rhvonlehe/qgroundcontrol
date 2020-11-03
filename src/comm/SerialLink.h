@@ -76,7 +76,6 @@ public:
     /// From LinkConfiguration
     LinkType    type            () { return LinkConfiguration::TypeSerial; }
     void        copyFrom        (LinkConfiguration* source);
-    bool        isHighLatencyAllowed () { return true; }
     void        loadSettings    (QSettings& settings, const QString& root);
     void        saveSettings    (QSettings& settings, const QString& root);
     void        updateSettings  ();
@@ -115,9 +114,8 @@ class SerialLink : public LinkInterface
 
 public:
     // LinkInterface overrides
-    QString getName     (void) const override;
-    bool    isConnected (void) const override;
-    void    disconnect  (void) override;
+    bool isConnected(void) const override;
+    void disconnect (void) override;
 
     /// Don't even think of calling this method!
     QSerialPort* _hackAccessToPort(void) { return _port; }
